@@ -31,4 +31,8 @@ Bonfire is a set of applications built in Python with the following primary comp
  * processor script
  * web application
 
-All of these components connect to an Elasticsearch deployment. For development, you should have Elasticsearch running and accessible from your development host. Python dependencies should be installed via pip install -r requirements.txt (ideally in a virtual environment)
+All of these components connect to an Elasticsearch deployment. For development, you should have Elasticsearch (version 1.0.1) running and accessible from your development host. Python dependencies should be installed via pip install -r requirements.txt (ideally in a virtual environment)
+
+## Elasticsearch client
+
+We are currently using the Elasticsearch Python client version 1.0.1 which is not available in PyPi. Install from source by running python setup.py. The Elasticsearch Python client source is available at: https://github.com/elasticsearch/elasticsearch-py. 
