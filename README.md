@@ -14,25 +14,53 @@ Design goals for this version of Bonfire include:
 
 # Deployment
 
-This is a work in progress. There is currently nothing to deploy. Anticipated deployment will require the following:
+Within the cloned repo, run:
 
- * A running Elasticsearch deployment
- * A seeded universe, expanded with the build-universe script
- * A running Tweet collector (ideally managed by a process manager such as Mozilla Circus, Supervisord, or Upstart)
- * A running Tweet processor (for resolving URLs and extracting web content) -- also managed.
- * A front-end deployment -- presumably a web application that can to Elasticsearch via Bonfire's aggregation & search API
+```
+pip install .
+```
+
+This will install the bonfire command line tool and dependencies except for the Elasticsearch database and the Elasticsearch Python client library.
+
+## Elasticsearch Python client library
+
+The Elasticsearch Python client source is available at: https://github.com/elasticsearch/elasticsearch-py. 
+
+## Elasticsearch
+
+For information about installing Elasticsearch, please go to http://elasticsearch.org.
 
 # Development
 
-Bonfire is a set of applications built in Python with the following primary components:
+To create an editable local deployment for development (ideally within
+a virtualenvironment):
 
- * universe management script
- * collector script
- * processor script
- * web application
+```
+pip install --editable .
+```
 
-All of these components connect to an Elasticsearch deployment. For development, you should have Elasticsearch (version 1.0.1) running and accessible from your development host. Python dependencies should be installed via pip install -r requirements.txt (ideally in a virtual environment)
+This will install the bonfire command line tool, and dependencies except for the Elasticsearch Python client.
+
+For development, you should have Elasticsearch (version 1.0.1) running and accessible from your development host.
 
 ## Elasticsearch client
 
 We are currently using the Elasticsearch Python client version 1.0.1 which is not available in PyPi. Install from source by running python setup.py. The Elasticsearch Python client source is available at: https://github.com/elasticsearch/elasticsearch-py. 
+
+# Testing
+
+To run all tests:
+
+    python setup.py test
+
+To test a specific module:
+
+    python -m unittest tests.test_universe
+
+# Usage
+
+The installation and development installation processes above install the bonfire command line utility to your path. For info on using Bonfire, type:
+
+```
+bonfire --help
+```
