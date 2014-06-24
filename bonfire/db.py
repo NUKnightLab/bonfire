@@ -40,6 +40,13 @@ def save_user(universe, user):
         body=user) 
 
 
+def get_universe_users(universe, size=5000):
+    """Get users for the universe."""
+    res = es(universe).search(index=universe, doc_type=USER_DOCUMENT_TYPE,
+        body={}, size=size)
+    return res['hits']['hits']
+
+
 def enqueue_tweet(universe, tweet):
     """Save a tweet to the universe index as an uprocessed tweet document."""
     es(universe).index(index=universe,
