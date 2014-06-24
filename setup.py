@@ -2,7 +2,7 @@ from os.path import expanduser
 from setuptools import setup, find_packages 
 
 """
-TODO: will this potially overwrite modified configs? Does setuptools give us
+TODO(#12): will this potially overwrite modified configs? Does setuptools give us
 a way to deal with this? Need to preserve internal config if it has
 been modified.
 """
