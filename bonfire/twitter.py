@@ -14,9 +14,9 @@ def lookup_users(universe, usernames):
     """Lookup Twitter users by screen name. Limited to first 100 user
     names by API limitation."""
     if isinstance(usernames, basestring):
-        usernames == [ usernames ]
+        usernames = [ usernames ]
     return client(universe).api.users.lookup.post(
-        screen_name=','.join(usernames)[:100]).data
+        screen_name=','.join(usernames[:100])).data
 
 
 def get_friends(universe, user_id):
