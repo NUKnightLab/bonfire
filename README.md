@@ -3,7 +3,7 @@
 Automated curation of tweeted content from your Twitterverse
 
 
-This is a complete re-write of the original Bonfire project from Knight Lab, which is a Tweeted content curator inspired by the Nieman Labs Fuego project.
+This is a complete re-write of the original Bonfire project from Knight Lab, which is a Tweeted content curator inspired by Nieman Lab's Fuego project.
 
 Design goals for this version of Bonfire include:
 
