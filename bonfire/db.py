@@ -41,7 +41,7 @@ def index_user(universe, user):
 def update_user(universe, user):
     """Update a user in the universe index."""
     es(universe).update(index=universe, doc_type=USER_DOCUMENT_TYPE, id=user['id'],
-        body=user)
+        body={'doc': user})
 
 def get_universe_users(universe, size=5000):
     """Get users for the universe."""
