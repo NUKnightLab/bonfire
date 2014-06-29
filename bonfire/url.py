@@ -1,8 +1,9 @@
-from .db import get_url_cache, set_url_cache
+from .db import get_cached_url, set_cached_url
 import requests
 
-def increase_connection_pools(session):
-    """ Change session defaults for a requests.session object, optimized for many connections at once. """
+def start_session():
+    """Start a requests session optimized for many connections at once."""
+    session = requests.Session()
     session.max_redirects = 3
     http_adapter = requests.adapters.HTTPAdapter()
     https_adapter = requests.adapters.HTTPAdapter()
@@ -18,15 +19,15 @@ def increase_connection_pools(session):
 
 def resolve_url(url, session=None):
     """ Returns the final destinations of the given urls, allowing redirects """
-    cached_url = get_url_cache(url)
+    cached_url = get_cached_url(url)
     if cached_url:
         return cached_url['resolved']
 
     if session is None:
-        session = increase_connection_pools(requests.Session())
+        session = start_session()
     try:
         resolved_url = session.head(url, timeout=4, allow_redirects=True).url
     except:
         resolved_url = url
-    set_url_cache(url, resolved_url)
-    return resolved_url
+    set_cached_url(url, resolved_url)
+    return results

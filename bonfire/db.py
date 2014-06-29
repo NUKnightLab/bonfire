@@ -20,6 +20,7 @@ URL_MAPPING = {
 }
 
 USER_DOCUMENT_TYPE = 'user'
+TWEET_DOCUMENT_TYPE = 'tweet'
 UNPROCESSED_TWEET_DOCUMENT_TYPE = 'rawtweet'
 UNPROCESSED_TWEET_MAPPING = {
   'properties': {
@@ -97,21 +98,32 @@ def save_user(universe, user):
             update_user(universe, user)
 
 def enqueue_tweet(universe, tweet):
-    """Save a tweet to the universe index as an uprocessed tweet document."""
+    """Save a tweet to the universe index as an unprocessed tweet document."""
     es(universe).index(index=universe,
         doc_type=UNPROCESSED_TWEET_DOCUMENT_TYPE,
         id=tweet['id'],
         body=tweet)
 
-def get_url_cache(url):
-    """Get a URL from the URL_CACHE_INDEX"""
+def next_unprocessed_tweet(universe):
+    """Get the next unprocessed tweet and delete it from the index."""
+    pass
+
+def save_tweet(universe, tweet):
+    """Save a tweet to the universe index, fully processed."""
+    es(universe).index(index=universe,
+        doc_type=TWEET_DOCUMENT_TYPE,
+        id=tweet['id'],
+        body=tweet)
+
+def get_cached_url(url):
+    """Get a URL from the URL_CACHE_INDEX. Returns None if URL doesn't exist."""
     try:
         return es_url_cache().get_source(index=URL_CACHE_INDEX, 
             id=url, doc_type=URL_DOCUMENT_TYPE)
     except NotFoundError:
         return None
 
-def set_url_cache(url, resolved_url):
+def set_cached_url(url, resolved_url):
     """Index a URL and its resolution in Elasticsearch"""
     body = {
         'url': url,
