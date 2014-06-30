@@ -2,26 +2,24 @@ from elasticsearch import Elasticsearch
 from elasticsearch.exceptions import NotFoundError
 from .config import get_elasticsearch_hosts
 
-URL_CACHE_INDEX = 'url_cache'
-CACHED_URL_DOCUMENT_TYPE = 'cached_url'
+MANAGEMENT_INDEX = 'bonfire'
+CONTENT_DOCUMENT_TYPE = 'content'
+CACHED_URL_DOCUMENT_TYPE = 'url'
 CACHED_URL_MAPPING = {
-    'url': {
-        'properties': {
-            'url': {
-                'type': 'string',
-                'index': 'not_analyzed'
-            },
-            'resolved': {
-                'type': 'string',
-                'index': 'not_analyzed'
-            }
+    'properties': {
+        'url': {
+            'type': 'string',
+            'index': 'not_analyzed'
+        },
+        'resolved': {
+            'type': 'string',
+            'index': 'not_analyzed'
         }
     }
 }
 
 USER_DOCUMENT_TYPE = 'user'
 TWEET_DOCUMENT_TYPE = 'tweet'
-URL_DOCUMENT_TYPE = 'url'
 UNPROCESSED_TWEET_DOCUMENT_TYPE = 'rawtweet'
 UNPROCESSED_TWEET_MAPPING = {
   'properties': {
@@ -45,22 +43,32 @@ def es(universe):
             hosts=get_elasticsearch_hosts(universe))
     return _es_connections[universe]
 
-def es_url_cache():
-    """Returns Elasticsearch connection to the URL_CACHE_INDEX"""
+def es_management():
+    """Returns Elasticsearch connection to the management index."""
     global _es_connections
-    if not URL_CACHE_INDEX in _es_connections:
-        _es_connections[URL_CACHE_INDEX] = Elasticsearch()
-    return _es_connections[URL_CACHE_INDEX]
+    if not MANAGEMENT_INDEX in _es_connections:
+        _es_connections[MANAGEMENT_INDEX] = Elasticsearch()
+    return _es_connections[MANAGEMENT_INDEX]
 
 def build_universe_mappings(universe):
-    es(universe).indices.put_mapping(UNPROCESSED_TWEET_DOCUMENT_TYPE,
-        UNPROCESSED_TWEET_MAPPING)
+    try:
+        es(universe).indices.put_mapping(UNPROCESSED_TWEET_DOCUMENT_TYPE,
+            UNPROCESSED_TWEET_MAPPING)
+    except NotFoundError:
+        create_index(universe)
+        build_universe_mappings(universe)
 
-def build_url_cache_mappings():
-    es_url_cache().indices.put_mapping(CACHED_URL_DOCUMENT_TYPE,
-        CACHED_URL_MAPPING,
-        index=URL_CACHE_INDEX)
+def build_management_mappings():
+    try:
+        es_management().indices.put_mapping(CACHED_URL_DOCUMENT_TYPE,
+            CACHED_URL_MAPPING,
+            index=MANAGEMENT_INDEX)
+    except NotFoundError:
+        es_management().indices.create(index=MANAGEMENT_INDEX)
+        build_management_mappings()
 
+def create_index(universe):
+    es(universe).indices.create(index=universe)
 
 def index_user(universe, user):
     """Add a user to the universe index."""
@@ -108,12 +116,19 @@ def enqueue_tweet(universe, tweet):
 def next_unprocessed_tweet(universe):
     """Get the next unprocessed tweet and delete it from the index."""
     # TODO: redo this so it is an efficient queue. Currently for testing only.
-    result = es(universe).search(index=universe,
-        doc_type=UNPROCESSED_TWEET_DOCUMENT_TYPE,
-        size=1)['hits']['hits'][0]
-    es(universe).delete(index=universe,
-        doc_type=UNPROCESSED_TWEET_DOCUMENT_TYPE,
-        id=result['_id'])
+    try:
+        result = es(universe).search(index=universe,
+            doc_type=UNPROCESSED_TWEET_DOCUMENT_TYPE,
+            size=1)['hits']['hits'][0]
+    except IndexError:
+        return None
+    try:
+        es(universe).delete(index=universe,
+            doc_type=UNPROCESSED_TWEET_DOCUMENT_TYPE,
+            id=result['_id'])
+    except NotFoundError:
+        # Something's wrong. Ignore it for now.
+        return next_unprocessed_tweet(universe)
     return result
 
 def save_tweet(universe, tweet):
@@ -123,17 +138,17 @@ def save_tweet(universe, tweet):
         id=tweet['id'],
         body=tweet)
 
-def save_url(universe, url):
-    """Save a URL to the universe index."""
-    es(universe).index(index=universe,
-        doc_type=URL_DOCUMENT_TYPE,
-        id=url['url'],
-        body=url)
+def save_content(content):
+    """Save the content of a URL to the management index."""
+    es_management().index(index=MANAGEMENT_INDEX,
+        doc_type=CONTENT_DOCUMENT_TYPE,
+        id=content['url'],
+        body=content)
 
 def get_cached_url(url):
-    """Get a URL from the URL_CACHE_INDEX. Returns None if URL doesn't exist."""
+    """Get a URL from the management index. Returns None if URL doesn't exist."""
     try:
-        return es_url_cache().get_source(index=URL_CACHE_INDEX, 
+        return es_management().get_source(index=MANAGEMENT_INDEX, 
             id=url, doc_type=CACHED_URL_DOCUMENT_TYPE)
     except NotFoundError:
         return None
@@ -144,5 +159,5 @@ def set_cached_url(url, resolved_url):
         'url': url,
         'resolved': resolved_url
     }
-    es_url_cache().index(index=URL_CACHE_INDEX, doc_type=CACHED_URL_DOCUMENT_TYPE,
+    es_management().index(index=MANAGEMENT_INDEX, doc_type=CACHED_URL_DOCUMENT_TYPE,
         body=body, id=url)
