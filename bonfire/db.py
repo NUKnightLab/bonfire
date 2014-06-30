@@ -107,7 +107,14 @@ def enqueue_tweet(universe, tweet):
 
 def next_unprocessed_tweet(universe):
     """Get the next unprocessed tweet and delete it from the index."""
-    pass
+    # TODO: redo this so it is an efficient queue. Currently for testing only.
+    result = es(universe).search(index=universe,
+        doc_type=UNPROCESSED_TWEET_DOCUMENT_TYPE,
+        size=1)['hits']['hits'][0]
+    es(universe).delete(index=universe,
+        doc_type=UNPROCESSED_TWEET_DOCUMENT_TYPE,
+        id=result['_id'])
+    return result
 
 def save_tweet(universe, tweet):
     """Save a tweet to the universe index, fully processed."""
