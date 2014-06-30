@@ -3,8 +3,8 @@ from elasticsearch.exceptions import NotFoundError
 from .config import get_elasticsearch_hosts
 
 URL_CACHE_INDEX = 'url_cache'
-URL_DOCUMENT_TYPE = 'url'
-URL_MAPPING = {
+CACHED_URL_DOCUMENT_TYPE = 'cached_url'
+CACHED_URL_MAPPING = {
     'url': {
         'properties': {
             'url': {
@@ -21,6 +21,7 @@ URL_MAPPING = {
 
 USER_DOCUMENT_TYPE = 'user'
 TWEET_DOCUMENT_TYPE = 'tweet'
+URL_DOCUMENT_TYPE = 'url'
 UNPROCESSED_TWEET_DOCUMENT_TYPE = 'rawtweet'
 UNPROCESSED_TWEET_MAPPING = {
   'properties': {
@@ -56,8 +57,8 @@ def build_universe_mappings(universe):
         UNPROCESSED_TWEET_MAPPING)
 
 def build_url_cache_mappings():
-    es_url_cache().indices.put_mapping(URL_DOCUMENT_TYPE,
-        URL_MAPPING,
+    es_url_cache().indices.put_mapping(CACHED_URL_DOCUMENT_TYPE,
+        CACHED_URL_MAPPING,
         index=URL_CACHE_INDEX)
 
 
@@ -115,11 +116,18 @@ def save_tweet(universe, tweet):
         id=tweet['id'],
         body=tweet)
 
+def save_url(universe, url):
+    """Save a URL to the universe index."""
+    es(universe).index(index=universe,
+        doc_type=URL_DOCUMENT_TYPE,
+        id=url['url'],
+        body=url)
+
 def get_cached_url(url):
     """Get a URL from the URL_CACHE_INDEX. Returns None if URL doesn't exist."""
     try:
         return es_url_cache().get_source(index=URL_CACHE_INDEX, 
-            id=url, doc_type=URL_DOCUMENT_TYPE)
+            id=url, doc_type=CACHED_URL_DOCUMENT_TYPE)
     except NotFoundError:
         return None
 
@@ -129,5 +137,5 @@ def set_cached_url(url, resolved_url):
         'url': url,
         'resolved': resolved_url
     }
-    es_url_cache().index(index=URL_CACHE_INDEX, doc_type=URL_DOCUMENT_TYPE,
+    es_url_cache().index(index=URL_CACHE_INDEX, doc_type=CACHED_URL_DOCUMENT_TYPE,
         body=body, id=url)
