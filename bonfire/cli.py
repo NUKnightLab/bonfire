@@ -5,6 +5,7 @@ import sys
 from .config import config_file_path, get_universes
 from .universe import build_universe
 from .twitter import collect_universe_tweets
+from .process import process_universe_rawtweets
 
 
 def edit_file(filename):
@@ -76,10 +77,15 @@ def collect(universe):
     """Collect Tweets for a universe."""
     collect_universe_tweets(universe)
 
+@click.command()
+@click.argument('universe')
+def process(universe):
+    """Resolve, extract, and save tweets from a universe."""
+    process_universe_rawtweets(universe)
 
 cli.add_command(config)
 cli.add_command(copyconfig)
 cli.add_command(universes)
 cli.add_command(build)
 cli.add_command(collect)
-
+cli.add_command(process)
