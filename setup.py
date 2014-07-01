@@ -1,11 +1,13 @@
+"""
+Install with `pip install .`
+
+WARNING: pip install with `--upgrade` option will overwrite the currently
+installed internal configuration. It is recommended that you run
+`bonfire copyconfig` to externalize your configuration file.
+"""
 from os.path import expanduser
 from setuptools import setup, find_packages 
 
-"""
-TODO(#12): will this potially overwrite modified configs? Does setuptools give us
-a way to deal with this? Need to preserve internal config if it has
-been modified.
-"""
 
 setup(
     name='bonfire',
@@ -14,6 +16,7 @@ setup(
     include_package_data=True,
     install_requires=[
         'Click',
+        'newspaper',
     ],
     data_files=[('config', ['bonfire.cfg'])],
     entry_points="""
