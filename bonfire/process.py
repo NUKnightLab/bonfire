@@ -18,7 +18,6 @@ def process_universe_rawtweets(universe, build_mappings=True):
 
 def process_rawtweet(universe, raw_tweet):
     """Saves a new tweet and extracts metadata from its URLs."""
-    print 'Starting tweet %s' % raw_tweet['_id']
     tweet = {
         'id': raw_tweet['_source']['id'],
         'id_str': raw_tweet['_source']['id_str'],
@@ -35,11 +34,9 @@ def process_rawtweet(universe, raw_tweet):
 
     urls = [u['expanded_url'] for u in raw_tweet['_source']['entities']['urls']]
     for url in filter(lambda u: get_cached_url(u) is None, urls):
-        print 'Extracting article %s' % url
         try:
             extracted_article = extract(url)
         except Exception as e:
-            print '%s: %s %s' % (url, e, e.message)
             continue
         set_cached_url(url, extracted_article['url'])
         extracted_article['tweet_id'] = tweet['id']

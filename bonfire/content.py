@@ -11,9 +11,10 @@ def extract(url):
 
     result = {
         #'orig_url': url,
-        'url': f.get_canonical() or '',
+        'url': f.get_canonical_url() or '',
         'title': f.get_title() or '',
         'description': f.get_description() or '',
+        'text': article.text or '',
         'published': f.get_published() or '',
         'authors': f.get_authors() or '',
         'img': f.get_image(),
@@ -21,7 +22,7 @@ def extract(url):
         'favicon': f.get_favicon(),
         'raw_html': article.html or '',
         'tags': f.get_tags(),
-        'og_type': article.meta_data['og'].get('type', ''),
+        'opengraph_type': article.meta_data['og'].get('type', ''),
         'twitter_type': article.meta_data['twitter'].get('card', ''),
         'twitter_creator': article.meta_data['twitter'].get('creator', '').lstrip('@')
     }
@@ -39,11 +40,11 @@ class NewspaperFetcher(object):
         """Adds the domain if the URL is relative."""
         if url.startswith('http'):
             return url
-        parsed_uri = urlparse(self.get_canonical())
+        parsed_uri = urlparse(self.get_canonical_url())
         domain = "{uri.scheme}://{uri.netloc}".format(uri=parsed_uri)
         return urljoin(domain, url)
 
-    def get_canonical(self):
+    def get_canonical_url(self):
         return self.article.canonical_link.strip() or \
                self.article.meta_data['og'].get('url', '').strip() or \
                self.article.meta_data['twitter'].get('url', '').strip()
