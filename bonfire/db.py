@@ -43,12 +43,14 @@ def es(universe):
             hosts=get_elasticsearch_hosts(universe))
     return _es_connections[universe]
 
+
 def es_management():
     """Returns Elasticsearch connection to the management index."""
     global _es_connections
     if not MANAGEMENT_INDEX in _es_connections:
         _es_connections[MANAGEMENT_INDEX] = Elasticsearch()
     return _es_connections[MANAGEMENT_INDEX]
+
 
 def build_universe_mappings(universe):
     try:
@@ -57,6 +59,7 @@ def build_universe_mappings(universe):
     except NotFoundError:
         create_index(universe)
         build_universe_mappings(universe)
+
 
 def build_management_mappings():
     try:
@@ -67,8 +70,10 @@ def build_management_mappings():
         es_management().indices.create(index=MANAGEMENT_INDEX)
         build_management_mappings()
 
+
 def create_index(universe):
     es(universe).indices.create(index=universe)
+
 
 def index_user(universe, user):
     """Add a user to the universe index."""
@@ -77,10 +82,12 @@ def index_user(universe, user):
         id=user['id'],
         body=user) 
 
+
 def update_user(universe, user):
     """Update a user in the universe index."""
-    es(universe).update(index=universe, doc_type=USER_DOCUMENT_TYPE, id=user['id'],
-        body={'doc': user})
+    es(universe).update(index=universe, doc_type=USER_DOCUMENT_TYPE,
+        id=user['id'], body={'doc': user})
+
 
 def get_universe_users(universe, size=5000):
     """Get users for the universe."""
@@ -88,12 +95,15 @@ def get_universe_users(universe, size=5000):
         body={}, size=size)
     return res['hits']['hits']
 
+
 def get_user(universe, user):
     """Get a user from the universe index."""
-    return es(universe).get_source(index=universe, doc_type=USER_DOCUMENT_TYPE, id=user['id'])
+    return es(universe).get_source(index=universe,
+        doc_type=USER_DOCUMENT_TYPE, id=user['id'])
 
 def save_user(universe, user):
-    """Check if a user exists in the database. If not, create it. Otherwise, If so, update it if need be."""
+    """Check if a user exists in the database. If not, create it.
+    Otherwise, If so, update it if need be."""
     try:
         old_user = get_user(universe, user)
     except NotFoundError:
@@ -106,16 +116,20 @@ def save_user(universe, user):
         else:
             update_user(universe, user)
 
+
 def enqueue_tweet(universe, tweet):
-    """Save a tweet to the universe index as an unprocessed tweet document."""
+    """Save a tweet to the universe index as an unprocessed tweet document.
+    """
     es(universe).index(index=universe,
         doc_type=UNPROCESSED_TWEET_DOCUMENT_TYPE,
         id=tweet['id'],
         body=tweet)
 
+
 def next_unprocessed_tweet(universe):
     """Get the next unprocessed tweet and delete it from the index."""
-    # TODO: redo this so it is an efficient queue. Currently for testing only.
+    # TODO: redo this so it is an efficient queue. Currently for
+    # testing only.
     try:
         result = es(universe).search(index=universe,
             doc_type=UNPROCESSED_TWEET_DOCUMENT_TYPE,
@@ -131,12 +145,14 @@ def next_unprocessed_tweet(universe):
         return next_unprocessed_tweet(universe)
     return result
 
+
 def save_tweet(universe, tweet):
     """Save a tweet to the universe index, fully processed."""
     es(universe).index(index=universe,
         doc_type=TWEET_DOCUMENT_TYPE,
         id=tweet['id'],
         body=tweet)
+
 
 def save_content(content):
     """Save the content of a URL to the management index."""
@@ -145,13 +161,16 @@ def save_content(content):
         id=content['url'],
         body=content)
 
+
 def get_cached_url(url):
-    """Get a URL from the management index. Returns None if URL doesn't exist."""
+    """Get a URL from the management index. Returns None if URL doesn't
+    exist."""
     try:
         return es_management().get_source(index=MANAGEMENT_INDEX, 
             id=url, doc_type=CACHED_URL_DOCUMENT_TYPE)
     except NotFoundError:
         return None
+
 
 def set_cached_url(url, resolved_url):
     """Index a URL and its resolution in Elasticsearch"""
@@ -159,5 +178,11 @@ def set_cached_url(url, resolved_url):
         'url': url,
         'resolved': resolved_url
     }
-    es_management().index(index=MANAGEMENT_INDEX, doc_type=CACHED_URL_DOCUMENT_TYPE,
-        body=body, id=url)
+    es_management().index(index=MANAGEMENT_INDEX,
+        doc_type=CACHED_URL_DOCUMENT_TYPE, body=body, id=url)
+
+
+def get_universe_tweets(universe, size=100):
+    res = es(universe).search(index=universe, doc_type=TWEET_DOCUMENT_TYPE,
+        body={}, size=size)
+    return [tweet['_source'] for tweet in res['hits']['hits']]
