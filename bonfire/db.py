@@ -186,3 +186,31 @@ def get_universe_tweets(universe, size=100):
     res = es(universe).search(index=universe, doc_type=TWEET_DOCUMENT_TYPE,
         body={}, size=size)
     return [tweet['_source'] for tweet in res['hits']['hits']]
+
+def search_tweets(universe, query, size=100):
+    """Search text of all tweets in a given universe for a given string, 
+    or a custom match query."""
+    if isinstance(query, basestring):
+        query = {'text': query}
+    body = {
+        'query': {
+            'match': query
+        }
+    }
+    res = es(universe).search(index=universe, doc_type=TWEET_DOCUMENT_TYPE,
+        body=body, size=size)
+    return [tweet['_source'] for tweet in res['hits']['hits']]
+
+def search_content(query, size=20):
+    """Search fulltext of all content for a given string, 
+    or a custom match query."""
+    if isinstance(query, basestring):
+        query = {'text': query}
+    body = {
+        'query': {
+            'match': query
+        }
+    }
+    res = es_management().search(index=MANAGEMENT_INDEX, doc_type=CONTENT_DOCUMENT_TYPE,
+        body=body, size=size)
+    return [content['_source'] for content in res['hits']['hits']]
