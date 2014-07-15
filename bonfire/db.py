@@ -187,7 +187,7 @@ def get_universe_tweets(universe, size=100):
         body={}, size=size)
     return [tweet['_source'] for tweet in res['hits']['hits']]
 
-def search_tweets(universe, query, size=100):
+def search_universe_tweets(universe, query, size=100):
     """Search text of all tweets in a given universe for a given string, 
     or a custom match query."""
     if isinstance(query, basestring):
