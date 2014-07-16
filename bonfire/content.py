@@ -20,7 +20,7 @@ def extract(url):
         'title': f.get_title() or '',
         'description': f.get_description() or '',
         'text': article.text or '',
-        'published': f.get_published() or '',
+        'published': f.get_published() or None,
         'authors': f.get_authors() or '',
         'img': f.get_image(),
         'player': article.meta_data['twitter'].get('player', {}).get('url', ''),
@@ -83,7 +83,7 @@ class NewspaperFetcher(object):
 
     def get_published(self):
         return self.article.published_date.strip() or \
-               self.article.meta_data['og'].get('article', {}).get('published_time', '')
+               self.article.meta_data['og'].get('article', {}).get('published_time')
 
     def get_authors(self):
         return ', '.join(self.article.authors) or \

@@ -20,6 +20,14 @@ CACHED_URL_MAPPING = {
 
 USER_DOCUMENT_TYPE = 'user'
 TWEET_DOCUMENT_TYPE = 'tweet'
+TWEET_MAPPING = {
+    'properties': {
+        'content_url': {
+            'type': 'string',
+            'index': 'not_analyzed'
+        }
+    }
+}
 UNPROCESSED_TWEET_DOCUMENT_TYPE = 'rawtweet'
 UNPROCESSED_TWEET_MAPPING = {
   'properties': {
@@ -54,6 +62,8 @@ def es_management():
 
 def build_universe_mappings(universe):
     try:
+        es(universe).indices.put_mapping(TWEET_DOCUMENT_TYPE,
+            TWEET_MAPPING)
         es(universe).indices.put_mapping(UNPROCESSED_TWEET_DOCUMENT_TYPE,
             UNPROCESSED_TWEET_MAPPING)
     except NotFoundError:
@@ -225,3 +235,21 @@ def search_content(query, size=20):
     res = es_management().search(index=MANAGEMENT_INDEX, doc_type=CONTENT_DOCUMENT_TYPE,
         body=body, size=size)
     return [content['_source'] for content in res['hits']['hits']]
+
+def get_popular_content(universe, size=20):
+    body = {
+        'aggregations': {
+            CONTENT_DOCUMENT_TYPE: {
+                'terms': {
+                    'field': 'content_url'
+                }
+            }
+        }
+    }
+    res = es(universe).search(index=universe, doc_type=TWEET_DOCUMENT_TYPE,
+        body=body, size=0)
+    top_urls = [url['key'] for url in res['aggregations'][CONTENT_DOCUMENT_TYPE]['buckets'][:size]]
+    res = es_management().mget({'ids': top_urls}, 
+        index=MANAGEMENT_INDEX, doc_type=CONTENT_DOCUMENT_TYPE)
+    return filter(lambda c: c is not None,
+        [content['_source'] if content['found'] else None for content in res['docs']])
