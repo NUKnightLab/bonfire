@@ -236,7 +236,7 @@ def search_content(query, size=20):
         body=body, size=size)
     return [content['_source'] for content in res['hits']['hits']]
 
-def get_popular_content(universe, size=20):
+def get_popular_content(universe, size=100):
     body = {
         'aggregations': {
             CONTENT_DOCUMENT_TYPE: {

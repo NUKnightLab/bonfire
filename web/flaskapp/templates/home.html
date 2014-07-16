@@ -29,6 +29,18 @@
           </form>
         </div>
 
+        <div id="articles">
+        {% for article in content %}
+          <div class="row">
+            <div class="span4">
+              <div class="item">
+                <p><a href="{{ article.url }}" target="_blank">{{ article.title }}</a></p>
+              </div>
+            </div>
+          </div>
+        {% endfor %}
+        </div>
+
         <div id="tweets">
 
         {% for tweet in tweets %}
