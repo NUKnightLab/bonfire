@@ -24,10 +24,12 @@
 
         <div id="searchbox">
           <form action="" name="search">
-            Search Tweets: <input type="search" name="tweetsearch">
+            Search Tweets and content: <input type="search" name="tweetsearch">
             <input type="submit">
           </form>
         </div>
+
+        <h3>Content</h3>
 
         <div id="articles">
         {% for article in content %}
@@ -40,6 +42,8 @@
           </div>
         {% endfor %}
         </div>
+
+        <h3>Tweets</h3>
 
         <div id="tweets">
 

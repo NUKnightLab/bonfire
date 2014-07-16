@@ -1,13 +1,16 @@
 import sys
 from flask import Flask, render_template, request
-from bonfire.db import get_universe_tweets, get_popular_content
+from bonfire.db import get_universe_tweets, get_popular_content, search_content
 
 app = Flask(__name__)
 
 
 @app.route("/")
 def home():
-    content = get_popular_content(universe, size=20)
+    if request.args.get('tweetsearch'):
+        content = search_content(request.args.get('tweetsearch'), size=20)
+    else:
+        content = get_popular_content(universe, size=20)
     tweets = get_universe_tweets(universe, request.args.get('tweetsearch'), size=20)
     return render_template('home.html',
         universe = universe,

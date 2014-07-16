@@ -222,7 +222,7 @@ def get_universe_tweets(universe, query=None, size=100):
         body=body, size=size)
     return [tweet['_source'] for tweet in res['hits']['hits']]
 
-def search_content(query, size=20):
+def search_content(query, size=100):
     """Search fulltext of all content for a given string, 
     or a custom match query."""
     if isinstance(query, basestring):
