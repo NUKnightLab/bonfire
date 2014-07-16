@@ -237,6 +237,9 @@ def search_content(query, size=20):
     return [content['_source'] for content in res['hits']['hits']]
 
 def get_popular_content(universe, size=100):
+    """Gets the most popular URLs shared from a given universe,
+    and returns their full content.
+    """
     body = {
         'aggregations': {
             CONTENT_DOCUMENT_TYPE: {
@@ -249,6 +252,8 @@ def get_popular_content(universe, size=100):
     res = es(universe).search(index=universe, doc_type=TWEET_DOCUMENT_TYPE,
         body=body, size=0)
     top_urls = [url['key'] for url in res['aggregations'][CONTENT_DOCUMENT_TYPE]['buckets'][:size]]
+
+    # Now query the content index to get the full metadata for these urls.
     res = es_management().mget({'ids': top_urls}, 
         index=MANAGEMENT_INDEX, doc_type=CONTENT_DOCUMENT_TYPE)
     return filter(lambda c: c is not None,

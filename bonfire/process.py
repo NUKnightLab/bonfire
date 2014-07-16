@@ -50,9 +50,9 @@ def process_rawtweet(universe, raw_tweet):
         'user_id': raw_tweet['_source']['user']['id'],
         'user_name': raw_tweet['_source']['user']['name'],
         'user_screen_name': raw_tweet['_source']['user']['screen_name'],
-        'user_profile_image_url': raw_tweet['_source']['user']['profile_image_url'],
+        'user_profile_image_url': raw_tweet['_source']['user']['profile_image_url']
     }
-    # Add the resolved URL from the extracted content
+    # Add the resolved URL from the extracted content. Only adds tweet's LAST URL.
     tweet['content_url'] = resolved_url
     save_tweet(universe, tweet)
 
