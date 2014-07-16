@@ -163,11 +163,11 @@ def save_content(content):
 
 
 def get_cached_url(url):
-    """Get a URL from the management index. Returns None if URL doesn't
+    """Get a resolved URL from the management index. Returns None if URL doesn't
     exist."""
     try:
         return es_management().get_source(index=MANAGEMENT_INDEX, 
-            id=url, doc_type=CACHED_URL_DOCUMENT_TYPE)
+            id=url.rstrip('/'), doc_type=CACHED_URL_DOCUMENT_TYPE)['resolved']
     except NotFoundError:
         return None
 
@@ -175,8 +175,8 @@ def get_cached_url(url):
 def set_cached_url(url, resolved_url):
     """Index a URL and its resolution in Elasticsearch"""
     body = {
-        'url': url,
-        'resolved': resolved_url
+        'url': url.rstrip('/'),
+        'resolved': resolved_url.rstrip('/')
     }
     es_management().index(index=MANAGEMENT_INDEX,
         doc_type=CACHED_URL_DOCUMENT_TYPE, body=body, id=url)

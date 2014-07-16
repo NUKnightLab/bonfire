@@ -11,7 +11,7 @@ def extract(url):
 
     result = {
         #'orig_url': url,
-        'url': f.get_canonical_url() or '',
+        'url': f.get_canonical_url().rstrip('/') or '',
         'title': f.get_title() or '',
         'description': f.get_description() or '',
         'text': article.text or '',

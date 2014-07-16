@@ -17,7 +17,29 @@ def process_universe_rawtweets(universe, build_mappings=True):
         process_rawtweet(universe, raw_tweet)
 
 def process_rawtweet(universe, raw_tweet):
-    """Saves a new tweet and extracts metadata from its URLs."""
+    """Saves a new tweet and extracts metadata from its URLs.
+    Does not save if there are no URLs."""
+
+    # First extract content
+    urls = [u['expanded_url'] for u in raw_tweet['_source']['entities']['urls']]
+    if not urls:
+        return
+
+    for url in urls:
+        # Is ths url in our cache?
+        resolved_url = get_cached_url(url)
+        if resolved_url is None:
+            # No-- go extract it
+            try:
+                article = extract(url)
+            except Exception as e:
+                print "%s %s" % (e, e.message)
+                continue
+            resolved_url = article['url']
+            # Add it to the URL cache and save it
+            set_cached_url(url, resolved_url)
+            save_content(article)
+
     tweet = {
         'id': raw_tweet['_source']['id'],
         'id_str': raw_tweet['_source']['id_str'],
@@ -28,16 +50,9 @@ def process_rawtweet(universe, raw_tweet):
         'user_id': raw_tweet['_source']['user']['id'],
         'user_name': raw_tweet['_source']['user']['name'],
         'user_screen_name': raw_tweet['_source']['user']['screen_name'],
-        'user_profile_image_url': raw_tweet['_source']['user']['profile_image_url']
+        'user_profile_image_url': raw_tweet['_source']['user']['profile_image_url'],
     }
+    # Add the resolved URL from the extracted content
+    tweet['content_url'] = resolved_url
     save_tweet(universe, tweet)
 
-    urls = [u['expanded_url'] for u in raw_tweet['_source']['entities']['urls']]
-    for url in filter(lambda u: get_cached_url(u) is None, urls):
-        try:
-            extracted_article = extract(url)
-        except Exception as e:
-            continue
-        set_cached_url(url, extracted_article['url'])
-        extracted_article['tweet_id'] = tweet['id']
-        save_content(extracted_article)
