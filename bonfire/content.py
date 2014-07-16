@@ -1,6 +1,10 @@
+import requests
 from newspaper import Article
 from urlparse import urlparse, urljoin
 
+def get_resolved_url(url, timeout=4):
+    """Fallback in case newspaper can't find a canonical url."""
+    return requests.head(url, timeout=timeout, allow_redirects=True).url
 
 def extract(url):
     """Extracts metadata from a URL, and returns a dict result."""
@@ -9,9 +13,10 @@ def extract(url):
     article.parse()
     f = NewspaperFetcher(article)
 
+    canonical_url = f.get_canonical_url() or get_resolved_url(url) or url
     result = {
         #'orig_url': url,
-        'url': f.get_canonical_url().rstrip('/') or '',
+        'url': canonical_url.rstrip('/'),
         'title': f.get_title() or '',
         'description': f.get_description() or '',
         'text': article.text or '',
