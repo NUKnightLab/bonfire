@@ -182,21 +182,32 @@ def set_cached_url(url, resolved_url):
         doc_type=CACHED_URL_DOCUMENT_TYPE, body=body, id=url)
 
 
-def get_universe_tweets(universe, size=100):
-    res = es(universe).search(index=universe, doc_type=TWEET_DOCUMENT_TYPE,
-        body={}, size=size)
-    return [tweet['_source'] for tweet in res['hits']['hits']]
-
-def search_universe_tweets(universe, query, size=100):
-    """Search text of all tweets in a given universe for a given string, 
-    or a custom match query."""
-    if isinstance(query, basestring):
-        query = {'text': query}
-    body = {
-        'query': {
-            'match': query
+def get_universe_tweets(universe, query=None, size=100):
+    """Gets all tweets in a given universe.
+    If query is None, fetches all.
+    If query is a string, fetches tweets matching the string's text.
+    If query is a dict, uses Elasticsearch Query DSL to parse it
+    (http://www.elasticsearch.org/guide/en/elasticsearch/reference/current/query-dsl.html)."""
+    if query is None:
+        body = {
+            'query': {
+                'match_all': {}
+            }
         }
-    }
+    elif isinstance(query, basestring):
+        body = {
+            'query': {
+                'match': {
+                    'text': query
+                }
+            }
+        }
+    else:
+        body = {
+            'query': {
+                'match': query
+            }
+        }
     res = es(universe).search(index=universe, doc_type=TWEET_DOCUMENT_TYPE,
         body=body, size=size)
     return [tweet['_source'] for tweet in res['hits']['hits']]
