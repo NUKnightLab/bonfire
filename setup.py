@@ -17,6 +17,7 @@ setup(
     install_requires=[
         'Click',
         'newspaper',
+        'birdy',
     ],
     data_files=[('config', ['bonfire.cfg'])],
     entry_points="""
