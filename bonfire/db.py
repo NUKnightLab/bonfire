@@ -196,7 +196,7 @@ def set_cached_url(url, resolved_url):
         doc_type=CACHED_URL_DOCUMENT_TYPE, body=body, id=url)
 
 
-def get_universe_tweets(universe, query=None, size=100):
+def get_universe_tweets(universe, query=None, since=24, size=100):
     """Gets all tweets in a given universe.
     If query is None, fetches all.
     If query is a string, fetches tweets matching the string's text.
@@ -222,6 +222,14 @@ def get_universe_tweets(universe, query=None, size=100):
                 'match': query
             }
         }
+    body['filter'] = {
+        'range': {
+            'created': {
+                'gte': 'now-%dh' % since,
+                'lte': 'now'
+            }
+        }
+    }
     res = es(universe).search(index=universe, doc_type=TWEET_DOCUMENT_TYPE,
         body=body, size=size)
     return [tweet['_source'] for tweet in res['hits']['hits']]
