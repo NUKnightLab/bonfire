@@ -22,6 +22,41 @@
         <h1>Bonfire</h1>
         <h2>{{ universe }}</h2>
 
+        <div id="searchbox">
+          <form action="" name="search">
+            Search Tweets and content: <input type="search" name="tweetsearch">
+            <input type="submit">
+          </form>
+        </div>
+
+        <br />
+
+        <div id="sincetoggle">
+        <form action="" name="sincetoggle">
+          <input type="radio" name="since" value="superfresh"> Hour
+          <input type="radio" name="since" value="fresh"> 4 Hours
+          <input type="radio" name="since" value="day"> Day
+          <input type="radio" name="since" value="week"> Week 
+          <input type="submit">
+        </form>
+        </div>
+
+        <h3>Content</h3>
+
+        <div id="articles">
+        {% for article in content %}
+          <div class="row">
+            <div class="span4">
+              <div class="item">
+                <p><a href="{{ article.url }}" target="_blank">{{ article.title }}</a></p>
+              </div>
+            </div>
+          </div>
+        {% endfor %}
+        </div>
+
+        <h3>Tweets</h3>
+
         <div id="tweets">
 
         {% for tweet in tweets %}
