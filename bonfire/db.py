@@ -20,6 +20,18 @@ CACHED_URL_MAPPING = {
 
 USER_DOCUMENT_TYPE = 'user'
 TWEET_DOCUMENT_TYPE = 'tweet'
+TWEET_MAPPING = {
+    'properties': {
+        'content_url': {
+            'type': 'string',
+            'index': 'not_analyzed'
+        },
+        'created': {
+            'type': 'date',
+            'format': 'EE MMM d HH:mm:ss Z yyyy'
+        }
+    }
+}
 UNPROCESSED_TWEET_DOCUMENT_TYPE = 'rawtweet'
 UNPROCESSED_TWEET_MAPPING = {
   'properties': {
@@ -54,6 +66,8 @@ def es_management():
 
 def build_universe_mappings(universe):
     try:
+        es(universe).indices.put_mapping(TWEET_DOCUMENT_TYPE,
+            TWEET_MAPPING)
         es(universe).indices.put_mapping(UNPROCESSED_TWEET_DOCUMENT_TYPE,
             UNPROCESSED_TWEET_MAPPING)
     except NotFoundError:
@@ -163,11 +177,11 @@ def save_content(content):
 
 
 def get_cached_url(url):
-    """Get a URL from the management index. Returns None if URL doesn't
+    """Get a resolved URL from the management index. Returns None if URL doesn't
     exist."""
     try:
         return es_management().get_source(index=MANAGEMENT_INDEX, 
-            id=url, doc_type=CACHED_URL_DOCUMENT_TYPE)
+            id=url.rstrip('/'), doc_type=CACHED_URL_DOCUMENT_TYPE)['resolved']
     except NotFoundError:
         return None
 
@@ -175,14 +189,100 @@ def get_cached_url(url):
 def set_cached_url(url, resolved_url):
     """Index a URL and its resolution in Elasticsearch"""
     body = {
-        'url': url,
-        'resolved': resolved_url
+        'url': url.rstrip('/'),
+        'resolved': resolved_url.rstrip('/')
     }
     es_management().index(index=MANAGEMENT_INDEX,
         doc_type=CACHED_URL_DOCUMENT_TYPE, body=body, id=url)
 
 
-def get_universe_tweets(universe, size=100):
+def get_universe_tweets(universe, query=None, since=24, size=100):
+    """Gets all tweets in a given universe.
+    If query is None, fetches all.
+    If query is a string, fetches tweets matching the string's text.
+    If query is a dict, uses Elasticsearch Query DSL to parse it
+    (http://www.elasticsearch.org/guide/en/elasticsearch/reference/current/query-dsl.html)."""
+    if query is None:
+        body = {
+            'query': {
+                'match_all': {}
+            }
+        }
+    elif isinstance(query, basestring):
+        body = {
+            'query': {
+                'match': {
+                    'text': query
+                }
+            }
+        }
+    else:
+        body = {
+            'query': {
+                'match': query
+            }
+        }
+    body['filter'] = {
+        'range': {
+            'created': {
+                'gte': 'now-%dh' % since,
+                'lte': 'now'
+            }
+        }
+    }
     res = es(universe).search(index=universe, doc_type=TWEET_DOCUMENT_TYPE,
-        body={}, size=size)
+        body=body, size=size)
     return [tweet['_source'] for tweet in res['hits']['hits']]
+
+def search_content(query, size=100):
+    """Search fulltext of all content for a given string, 
+    or a custom match query."""
+    if isinstance(query, basestring):
+        query = {'text': query}
+    body = {
+        'query': {
+            'match': query
+        }
+    }
+    res = es_management().search(index=MANAGEMENT_INDEX, doc_type=CONTENT_DOCUMENT_TYPE,
+        body=body, size=size)
+    return [content['_source'] for content in res['hits']['hits']]
+
+def get_popular_content(universe, since=24, size=100):
+    """Gets the most popular URLs shared from a given universe,
+    and returns their full content.
+    """
+    body = {
+        'aggregations': {
+            'recent_tweets': {
+                'filter': {
+                    'range': {
+                        'created': {
+                            'gte': 'now-%dh' % since,
+                            'lte': 'now'
+                        }
+                    }
+                },
+                'aggregations': {
+                    CONTENT_DOCUMENT_TYPE: {
+                        'terms': {
+                            'field': 'content_url',
+                            'size': size
+                        }
+                    }
+                }
+            }
+        }
+    }
+    res = es(universe).search(index=universe, doc_type=TWEET_DOCUMENT_TYPE,
+        body=body, size=0)
+    top_urls = [url['key'] for url in
+        res['aggregations']['recent_tweets'][CONTENT_DOCUMENT_TYPE]['buckets']]
+    if not top_urls:
+        return top_urls
+
+    # Now query the content index to get the full metadata for these urls.
+    res = es_management().mget({'ids': top_urls}, 
+        index=MANAGEMENT_INDEX, doc_type=CONTENT_DOCUMENT_TYPE)
+    return filter(lambda c: c is not None,
+        [content['_source'] if content['found'] else None for content in res['docs']])
