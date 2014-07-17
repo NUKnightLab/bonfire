@@ -60,7 +60,8 @@ def es_management():
     """Returns Elasticsearch connection to the management index."""
     global _es_connections
     if not MANAGEMENT_INDEX in _es_connections:
-        _es_connections[MANAGEMENT_INDEX] = Elasticsearch()
+        _es_connections[MANAGEMENT_INDEX] = Elasticsearch(
+            hosts=get_elasticsearch_hosts())
     return _es_connections[MANAGEMENT_INDEX]
 
 

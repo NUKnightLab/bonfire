@@ -53,8 +53,11 @@ def get_twitter_keys(universe):
     return k
 
 
-def get_elasticsearch_hosts(universe):
+def get_elasticsearch_hosts(universe=None):
     config = configuration()
-    hosts = config.get('universe:%s' % universe, 'elasticsearch_hosts')
+    if universe is None:
+        hosts = config.get('bonfire', 'elasticsearch_hosts')
+    else:
+        hosts = config.get('universe:%s' % universe, 'elasticsearch_hosts')
     return [s.strip() for s in CONFIG_LIST_REGEX.split(hosts) if s.strip()]
 
