@@ -6,6 +6,9 @@ def get_resolved_url(url, timeout=4):
     """Fallback in case newspaper can't find a canonical url."""
     return requests.head(url, timeout=timeout, allow_redirects=True).url
 
+def get_provider(url):
+    return urlparse(url).netloc.replace('www.', '').rsplit('.', 1)[0].title()
+
 def extract(url, html=None):
     """Extracts metadata from a URL, and returns a dict result.
     Skips downloading step if html kwarg is provided."""
@@ -21,6 +24,7 @@ def extract(url, html=None):
     canonical_url = f.get_canonical_url() or get_resolved_url(url) or url
     result = {
         'url': canonical_url.rstrip('/'),
+        'provider': get_provider(canonical_url),
         'title': f.get_title() or '',
         'description': f.get_description() or '',
         'text': article.text or '',
@@ -29,7 +33,6 @@ def extract(url, html=None):
         'img': f.get_image(),
         'player': article.meta_data['twitter'].get('player', {}).get('url', ''),
         'favicon': f.get_favicon(),
-        'raw_html': article.html or '',
         'tags': f.get_tags(),
         'opengraph_type': article.meta_data['og'].get('type', ''),
         'twitter_type': article.meta_data['twitter'].get('card', ''),

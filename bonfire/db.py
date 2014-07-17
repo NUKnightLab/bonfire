@@ -1,3 +1,5 @@
+import time
+import datetime
 from elasticsearch import Elasticsearch
 from elasticsearch.exceptions import NotFoundError
 from .config import get_elasticsearch_hosts
@@ -269,6 +271,13 @@ def get_popular_content(universe, since=24, size=100):
                         'terms': {
                             'field': 'content_url',
                             'size': size
+                        },
+                        'aggregations': {
+                            'first_tweeted': {
+                                'min': {
+                                    'field': 'created'
+                                }
+                            }
                         }
                     }
                 }
@@ -277,13 +286,43 @@ def get_popular_content(universe, since=24, size=100):
     }
     res = es(universe).search(index=universe, doc_type=TWEET_DOCUMENT_TYPE,
         body=body, size=0)
-    top_urls = [url['key'] for url in
-        res['aggregations']['recent_tweets'][CONTENT_DOCUMENT_TYPE]['buckets']]
+    top_urls = dict([(url['key'], url['first_tweeted']['value']) for url in
+        res['aggregations']['recent_tweets'][CONTENT_DOCUMENT_TYPE]['buckets']])
     if not top_urls:
-        return top_urls
+        return top_urls.keys()
 
     # Now query the content index to get the full metadata for these urls.
-    res = es_management().mget({'ids': top_urls}, 
+    content_res = es_management().mget({'ids': top_urls.keys()}, 
         index=MANAGEMENT_INDEX, doc_type=CONTENT_DOCUMENT_TYPE)
-    return filter(lambda c: c is not None,
-        [content['_source'] if content['found'] else None for content in res['docs']])
+
+    top_content = []
+    for content in content_res['docs']:
+        if not content['found']:
+            continue
+        first_tweeted = top_urls[content['_source']['url']]
+        content['_source']['first_tweeted'] = format_time(first_tweeted)
+        top_content.append(content['_source'])
+    return top_content
+
+def format_time(epoch):
+    now = datetime.datetime.utcnow()
+    then = datetime.datetime(*time.gmtime(epoch / 1000)[:7])
+    diff = now - then
+    days = diff.days
+    if days > 1:
+        return '%d days' % days
+    elif diff.days == 1:
+        return '%d day' % days
+    second_diff = (now - then).seconds
+    hours = second_diff / 60 / 60
+    if hours > 1:
+        return '%d hours' % hours
+    elif hours == 1:
+        return '%d hour' % hours
+    minutes = second_diff / 60
+    if minutes > 1:
+        return '%d minutes' % minutes
+    elif minutes == 1:
+        return '%d minute' % minutes
+    else:
+        return '%d seconds' % second_diff
