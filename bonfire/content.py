@@ -6,16 +6,20 @@ def get_resolved_url(url, timeout=4):
     """Fallback in case newspaper can't find a canonical url."""
     return requests.head(url, timeout=timeout, allow_redirects=True).url
 
-def extract(url):
-    """Extracts metadata from a URL, and returns a dict result."""
+def extract(url, html=None):
+    """Extracts metadata from a URL, and returns a dict result.
+    Skips downloading step if html kwarg is provided."""
+    
     article = Article(url)
-    article.download()
+    if html is not None:
+        article.set_html(html)
+    else:
+        article.download()
     article.parse()
     f = NewspaperFetcher(article)
 
     canonical_url = f.get_canonical_url() or get_resolved_url(url) or url
     result = {
-        #'orig_url': url,
         'url': canonical_url.rstrip('/'),
         'title': f.get_title() or '',
         'description': f.get_description() or '',
@@ -95,4 +99,3 @@ class NewspaperFetcher(object):
                      [self.article.meta_data['og'].get('section', '')]
         all_candidates = list(set(self.article.keywords + self.article.meta_keywords + list(self.article.tags) + og_results))
         return ', '.join(filter(lambda i: i, all_candidates))
-
