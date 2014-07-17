@@ -25,6 +25,10 @@ TWEET_MAPPING = {
         'content_url': {
             'type': 'string',
             'index': 'not_analyzed'
+        },
+        'created': {
+            'type': 'date',
+            'format': 'EE MMM d HH:mm:ss Z yyyy'
         }
     }
 }
@@ -236,22 +240,38 @@ def search_content(query, size=100):
         body=body, size=size)
     return [content['_source'] for content in res['hits']['hits']]
 
-def get_popular_content(universe, size=100):
+def get_popular_content(universe, since=24, size=100):
     """Gets the most popular URLs shared from a given universe,
     and returns their full content.
     """
     body = {
         'aggregations': {
-            CONTENT_DOCUMENT_TYPE: {
-                'terms': {
-                    'field': 'content_url'
+            'recent_tweets': {
+                'filter': {
+                    'range': {
+                        'created': {
+                            'gte': 'now-%dh' % since,
+                            'lte': 'now'
+                        }
+                    }
+                },
+                'aggregations': {
+                    CONTENT_DOCUMENT_TYPE: {
+                        'terms': {
+                            'field': 'content_url',
+                            'size': size
+                        }
+                    }
                 }
             }
         }
     }
     res = es(universe).search(index=universe, doc_type=TWEET_DOCUMENT_TYPE,
         body=body, size=0)
-    top_urls = [url['key'] for url in res['aggregations'][CONTENT_DOCUMENT_TYPE]['buckets'][:size]]
+    top_urls = [url['key'] for url in
+        res['aggregations']['recent_tweets'][CONTENT_DOCUMENT_TYPE]['buckets']]
+    if not top_urls:
+        return top_urls
 
     # Now query the content index to get the full metadata for these urls.
     res = es_management().mget({'ids': top_urls}, 
