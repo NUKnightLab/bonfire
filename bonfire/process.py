@@ -2,7 +2,6 @@ import time
 from newspaper import Article
 from .db import build_universe_mappings, build_management_mappings, next_unprocessed_tweet, \
                 save_tweet, save_content, get_cached_url, set_cached_url
-from .url import start_session, resolve_url
 from .content import extract
 
 def process_universe_rawtweets(universe, build_mappings=True):
