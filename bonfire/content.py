@@ -7,21 +7,22 @@ def get_resolved_url(url, timeout=4):
     return requests.head(url, timeout=timeout, allow_redirects=True).url
 
 def get_provider(url):
-    return urlparse(url).netloc.replace('www.', '').rsplit('.', 1)[0].title()
+    return urlparse(url).netloc.replace('www.', '')
 
 def extract(url, html=None):
     """Extracts metadata from a URL, and returns a dict result.
-    Skips downloading step if html kwarg is provided."""
+    Skips downloading step if html is provided."""
     
     article = Article(url)
-    if html is not None:
-        article.set_html(html)
-    else:
+    if html is None:
         article.download()
+    else:
+        article.set_html(html)
     article.parse()
     f = NewspaperFetcher(article)
 
     canonical_url = f.get_canonical_url() or get_resolved_url(url) or url
+    f.resolved_url = canonical_url
     result = {
         'url': canonical_url.rstrip('/'),
         'provider': get_provider(canonical_url),
@@ -47,19 +48,24 @@ class NewspaperFetcher(object):
 
     def __init__(self, newspaper_article):
         self.article = newspaper_article
+        self.resolved_url = ''
 
     def _add_domain(self, url):
         """Adds the domain if the URL is relative."""
         if url.startswith('http'):
             return url
-        parsed_uri = urlparse(self.get_canonical_url())
+        canonical_url = self.get_canonical_url()
+        if not canonical_url:
+            return canonical_url
+        parsed_uri = urlparse(canonical_url)
         domain = "{uri.scheme}://{uri.netloc}".format(uri=parsed_uri)
         return urljoin(domain, url)
 
     def get_canonical_url(self):
         return self.article.canonical_link.strip() or \
                self.article.meta_data['og'].get('url', '').strip() or \
-               self.article.meta_data['twitter'].get('url', '').strip()
+               self.article.meta_data['twitter'].get('url', '').strip() or \
+               self.resolved_url
 
     def get_title(self):
         return self.article.title.strip() or \
