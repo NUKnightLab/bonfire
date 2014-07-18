@@ -36,10 +36,9 @@ def get_friends(universe, user_id):
 
 
 def collect_universe_tweets(universe):
-    users = ','.join([str(u['_source']['id']) for u in
-        get_universe_users(universe)])
+    users = set([str(u['_source']['id']) for u in get_universe_users(universe)])
     client = stream_client(universe)
-    response = client.stream.statuses.filter.post(follow=users)
+    response = client.stream.statuses.filter.post(follow=','.join(users))
     for tweet in response.stream():
-        if 'entities' in tweet and tweet['entities']['urls']:
+        if 'entities' in tweet and tweet['entities']['urls'] and tweet['user']['id_str'] in users:
             enqueue_tweet(universe, tweet)

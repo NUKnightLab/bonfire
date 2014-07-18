@@ -11,9 +11,10 @@ def process_universe_rawtweets(universe, build_mappings=True):
         build_management_mappings()
     while True:
         raw_tweet = next_unprocessed_tweet(universe)
-        if not raw_tweet:
-            break
-        process_rawtweet(universe, raw_tweet)
+        if raw_tweet:
+            process_rawtweet(universe, raw_tweet)
+        else:
+            time.sleep(10)
 
 def process_rawtweet(universe, raw_tweet):
     """Saves a new tweet and extracts metadata from its URLs.
@@ -21,9 +22,6 @@ def process_rawtweet(universe, raw_tweet):
 
     # First extract content
     urls = [u['expanded_url'] for u in raw_tweet['_source']['entities']['urls']]
-    if not urls:
-        return
-
     for url in urls:
         # Is ths url in our cache?
         resolved_url = get_cached_url(url)
@@ -32,7 +30,7 @@ def process_rawtweet(universe, raw_tweet):
             try:
                 article = extract(url)
             except Exception as e:
-                print "%s %s" % (e, e.message)
+                print "\tFAIL on url %s, message %s" % (url, e.message)
                 continue
             resolved_url = article['url']
             # Add it to the URL cache and save it

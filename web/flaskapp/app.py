@@ -21,6 +21,7 @@ def home():
     else:
         content = get_popular_content(universe, since=since, size=20)
     tweets = get_universe_tweets(universe, request.args.get('tweetsearch'), since=since, size=20)
+
     return render_template('home.html',
         universe = universe,
         tweets   = tweets,

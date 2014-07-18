@@ -1,3 +1,5 @@
+import time
+import datetime
 from elasticsearch import Elasticsearch
 from elasticsearch.exceptions import NotFoundError
 from .config import get_elasticsearch_hosts
@@ -268,7 +270,20 @@ def get_popular_content(universe, since=24, size=100):
                     CONTENT_DOCUMENT_TYPE: {
                         'terms': {
                             'field': 'content_url',
-                            'size': size
+                            'size': size * 5,
+                            'min_doc_count': 2
+                        },
+                        'aggregations': {
+                            'first_tweeted': {
+                                'min': {
+                                    'field': 'created'
+                                }
+                            },
+                            'tweeters': {
+                                'terms': {
+                                    'field': 'user_screen_name'
+                                }
+                            }
                         }
                     }
                 }
@@ -276,14 +291,47 @@ def get_popular_content(universe, since=24, size=100):
         }
     }
     res = es(universe).search(index=universe, doc_type=TWEET_DOCUMENT_TYPE,
-        body=body, size=0)
-    top_urls = [url['key'] for url in
-        res['aggregations']['recent_tweets'][CONTENT_DOCUMENT_TYPE]['buckets']]
+        body=body, size=0)['aggregations']['recent_tweets'][CONTENT_DOCUMENT_TYPE]['buckets']
+
+    res = sorted(res, key=lambda r: len(r['tweeters']['buckets']), reverse=True)[:size]
+    top_urls = [url['key'] for url in res]
     if not top_urls:
         return top_urls
+    first_tweeted_map = dict([(url['key'], url['first_tweeted']['value']) for url in res])
 
     # Now query the content index to get the full metadata for these urls.
-    res = es_management().mget({'ids': top_urls}, 
+    content_res = es_management().mget({'ids': top_urls}, 
         index=MANAGEMENT_INDEX, doc_type=CONTENT_DOCUMENT_TYPE)
-    return filter(lambda c: c is not None,
-        [content['_source'] if content['found'] else None for content in res['docs']])
+    
+    top_content = []
+    content = filter(lambda c: c['found'], content_res['docs'])
+    for index, item in enumerate(content):
+        source = item['_source']
+        first_tweeted = first_tweeted_map[source['url']]
+        source['first_tweeted'] = format_time(first_tweeted)
+        source['rank'] = index + 1
+        top_content.append(source)
+    return top_content
+
+def pluralize(word, amt):
+    resp = "%d %s" % (amt, word)
+    if amt > 1:
+        return resp + "s"
+    elif amt == 1:
+        return resp
+    return None
+
+def format_time(epoch):
+    now = datetime.datetime.utcnow()
+    then = datetime.datetime(*time.gmtime(epoch / 1000)[:7])
+    diff = now - then
+    time_map = (
+        ('day', diff.days),
+        ('hour', diff.seconds / 60 / 60),
+        ('minute', diff.seconds / 60),
+        ('second', diff.seconds)
+    )
+    for word, amt in time_map:
+        if pluralize(word, amt):
+            return pluralize(word, amt)
+    return 'just now'
