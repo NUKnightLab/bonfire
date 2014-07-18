@@ -270,12 +270,18 @@ def get_popular_content(universe, since=24, size=100):
                     CONTENT_DOCUMENT_TYPE: {
                         'terms': {
                             'field': 'content_url',
-                            'size': size
+                            'size': size * 5,
+                            'min_doc_count': 2
                         },
                         'aggregations': {
                             'first_tweeted': {
                                 'min': {
                                     'field': 'created'
+                                }
+                            },
+                            'tweeters': {
+                                'terms': {
+                                    'field': 'user_screen_name'
                                 }
                             }
                         }
@@ -287,6 +293,7 @@ def get_popular_content(universe, since=24, size=100):
     res = es(universe).search(index=universe, doc_type=TWEET_DOCUMENT_TYPE,
         body=body, size=0)['aggregations']['recent_tweets'][CONTENT_DOCUMENT_TYPE]['buckets']
 
+    res = sorted(res, key=lambda r: len(r['tweeters']['buckets']), reverse=True)[:size]
     top_urls = [url['key'] for url in res]
     if not top_urls:
         return top_urls

@@ -33,7 +33,7 @@ def extract(url, html=None):
         'title': f.get_title() or '',
         'description': f.get_description() or '',
         'text': article.text or '',
-        'published': f.get_published() or None,
+        #'published': f.get_published() or None,
         'authors': f.get_authors() or '',
         'img': f.get_image(),
         'player': f.get_twitter_player(),
