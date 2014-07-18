@@ -40,5 +40,5 @@ def collect_universe_tweets(universe):
     client = stream_client(universe)
     response = client.stream.statuses.filter.post(follow=','.join(users))
     for tweet in response.stream():
-        if 'entities' in tweet and tweet['entities']['urls'] and u['user']['id_str'] in users:
+        if 'entities' in tweet and tweet['entities']['urls'] and tweet['user']['id_str'] in users:
             enqueue_tweet(universe, tweet)
