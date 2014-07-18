@@ -22,10 +22,6 @@ def home():
         content = get_popular_content(universe, since=since, size=20)
     tweets = get_universe_tweets(universe, request.args.get('tweetsearch'), since=since, size=20)
 
-    # Add more metadata
-    for index, item in enumerate(content):
-        content[index]['rank'] = index + 1
-
     return render_template('home.html',
         universe = universe,
         tweets   = tweets,

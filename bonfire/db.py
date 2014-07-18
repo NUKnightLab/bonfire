@@ -296,33 +296,34 @@ def get_popular_content(universe, since=24, size=100):
         index=MANAGEMENT_INDEX, doc_type=CONTENT_DOCUMENT_TYPE)
 
     top_content = []
-    for content in content_res['docs']:
-        if not content['found']:
-            continue
-        first_tweeted = top_urls[content['_source']['url']]
-        content['_source']['first_tweeted'] = format_time(first_tweeted)
-        top_content.append(content['_source'])
+    content = filter(lambda c: c['found'], content_res['docs'])
+    for index, item in enumerate(content):
+        source = item['_source']
+        first_tweeted = top_urls[source['url']]
+        source['first_tweeted'] = format_time(first_tweeted)
+        source['rank'] = index + 1
+        top_content.append(source)
     return top_content
+
+def pluralize(word, amt):
+    resp = "%d %s" % (amt, word)
+    if amt > 1:
+        return resp + "s"
+    elif amt == 1:
+        return resp
+    return None
 
 def format_time(epoch):
     now = datetime.datetime.utcnow()
     then = datetime.datetime(*time.gmtime(epoch / 1000)[:7])
     diff = now - then
-    days = diff.days
-    if days > 1:
-        return '%d days' % days
-    elif diff.days == 1:
-        return '%d day' % days
-    second_diff = (now - then).seconds
-    hours = second_diff / 60 / 60
-    if hours > 1:
-        return '%d hours' % hours
-    elif hours == 1:
-        return '%d hour' % hours
-    minutes = second_diff / 60
-    if minutes > 1:
-        return '%d minutes' % minutes
-    elif minutes == 1:
-        return '%d minute' % minutes
-    else:
-        return '%d seconds' % second_diff
+    time_map = (
+        ('day', diff.days),
+        ('hour', diff.seconds / 60 / 60),
+        ('minute', diff.seconds / 60),
+        ('second', diff.seconds)
+    )
+    for word, amt in time_map:
+        if pluralize(word, amt):
+            return pluralize(word, amt)
+    return 'just now'
