@@ -285,21 +285,22 @@ def get_popular_content(universe, since=24, size=100):
         }
     }
     res = es(universe).search(index=universe, doc_type=TWEET_DOCUMENT_TYPE,
-        body=body, size=0)
-    top_urls = dict([(url['key'], url['first_tweeted']['value']) for url in
-        res['aggregations']['recent_tweets'][CONTENT_DOCUMENT_TYPE]['buckets']])
+        body=body, size=0)['aggregations']['recent_tweets'][CONTENT_DOCUMENT_TYPE]['buckets']
+
+    top_urls = [url['key'] for url in res]
     if not top_urls:
-        return top_urls.keys()
+        return top_urls
+    first_tweeted_map = dict([(url['key'], url['first_tweeted']['value']) for url in res])
 
     # Now query the content index to get the full metadata for these urls.
-    content_res = es_management().mget({'ids': top_urls.keys()}, 
+    content_res = es_management().mget({'ids': top_urls}, 
         index=MANAGEMENT_INDEX, doc_type=CONTENT_DOCUMENT_TYPE)
-
+    
     top_content = []
     content = filter(lambda c: c['found'], content_res['docs'])
     for index, item in enumerate(content):
         source = item['_source']
-        first_tweeted = top_urls[source['url']]
+        first_tweeted = first_tweeted_map[source['url']]
         source['first_tweeted'] = format_time(first_tweeted)
         source['rank'] = index + 1
         top_content.append(source)
