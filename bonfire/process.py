@@ -11,9 +11,10 @@ def process_universe_rawtweets(universe, build_mappings=True):
         build_management_mappings()
     while True:
         raw_tweet = next_unprocessed_tweet(universe)
-        if not raw_tweet:
-            break
-        process_rawtweet(universe, raw_tweet)
+        if raw_tweet:
+            process_rawtweet(universe, raw_tweet)
+        else:
+            time.sleep(10)
 
 def process_rawtweet(universe, raw_tweet):
     """Saves a new tweet and extracts metadata from its URLs.
