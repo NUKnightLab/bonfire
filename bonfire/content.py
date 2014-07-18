@@ -36,12 +36,12 @@ def extract(url, html=None):
         'published': f.get_published() or None,
         'authors': f.get_authors() or '',
         'img': f.get_image(),
-        'player': article.meta_data.get('twitter', {}).get('player', {}).get('url', ''),
+        'player': f.get_twitter_player(),
         'favicon': f.get_favicon(),
         'tags': f.get_tags(),
         'opengraph_type': article.meta_data.get('og', {}).get('type', ''),
         'twitter_type': article.meta_data.get('twitter', {}).get('card', ''),
-        'twitter_creator': article.meta_data.get('twitter', {}).get('creator', '').lstrip('@')
+        'twitter_creator': f.get_twitter_creator()
     }
     return result
 
@@ -91,6 +91,18 @@ class NewspaperFetcher(object):
         favicon_url = self.article.meta_favicon or \
                       'http://g.etfv.co/%s?defaulticon=none' % self.get_canonical_url()
         return self._add_domain(favicon_url)
+
+    def get_twitter_player(self):
+        player = self.article.meta_data.get('twitter', {}).get('player', '')
+        if isinstance(player, dict):
+            player = player.get('url', '') or player.get('src', '')
+        return player
+
+    def get_twitter_creator(self):
+        creator = self.article.meta_data.get('twitter', {}).get('creator', '')
+        if isinstance(creator, dict):
+            creator = creator.get('url', '') or creator.get('src', '') or creator.get('id', '')
+        return creator.lstrip('@')
 
     def get_twitter_image(self):
         img = self.article.meta_data.get('twitter', {}).get('image', '')
