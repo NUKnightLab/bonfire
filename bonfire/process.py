@@ -21,9 +21,6 @@ def process_rawtweet(universe, raw_tweet):
 
     # First extract content
     urls = [u['expanded_url'] for u in raw_tweet['_source']['entities']['urls']]
-    if not urls:
-        return
-
     for url in urls:
         # Is ths url in our cache?
         resolved_url = get_cached_url(url)
