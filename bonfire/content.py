@@ -6,10 +6,6 @@ from urlparse import urlparse, urljoin
 # Add to these flags if you want to keep request arguments, etc.
 NEWSPAPER_FLAGS = set(('youtube.com'))
 
-def get_resolved_url(url, timeout=4):
-    """Fallback in case newspaper can't find a canonical url."""
-    return requests.head(url, timeout=timeout, allow_redirects=True).url
-
 def get_provider(url):
     return urlparse(url).netloc.replace('www.', '')
 
@@ -30,10 +26,9 @@ def extract(url, html=None):
     article.parse()
     f = NewspaperFetcher(article)
 
-    canonical_url = f.get_canonical_url() or get_resolved_url(url) or url
-    f.resolved_url = canonical_url
+    canonical_url = f.get_canonical_url() or url.rstrip('/')
     result = {
-        'url': canonical_url.rstrip('/'),
+        'url': canonical_url,
         'provider': get_provider(canonical_url),
         'title': f.get_title() or '',
         'description': f.get_description() or '',
@@ -59,33 +54,38 @@ class NewspaperFetcher(object):
         self.article = newspaper_article
         self.resolved_url = ''
 
+    def _get_resolved_url(self):
+        """Fallback in case newspaper can't find a good canonical url."""
+        if not self.resolved_url:
+            self.resolved_url = requests.head(self.article.url, timeout=4, allow_redirects=True).url
+        return self.resolved_url
+
     def _add_domain(self, url):
         """Adds the domain if the URL is relative."""
         if url.startswith('http'):
             return url
         canonical_url = self.get_canonical_url()
-        if not canonical_url:
-            return canonical_url
         parsed_uri = urlparse(canonical_url)
         domain = "{uri.scheme}://{uri.netloc}".format(uri=parsed_uri)
         return urljoin(domain, url)
 
     def get_canonical_url(self):
-        return self.article.canonical_link.strip() or \
-               self.article.meta_data.get('og', {}).get('url', '').strip() or \
-               self.article.meta_data.get('twitter', {}).get('url', '').strip() or \
-               self.resolved_url
+        canonical_url = self.article.meta_data.get('og', {}).get('url', '').strip() or \
+                        self.article.meta_data.get('twitter', {}).get('url', '').strip() or \
+                        self.article.canonical_link.strip() or \
+                        self._get_resolved_url()
+        return canonical_url.rstrip('/')
 
     def get_title(self):
-        return self.article.title.strip() or \
-               self.article.meta_data.get('og', {}).get('title', '').strip() or \
-               self.article.meta_data.get('twitter', {}).get('title', '').strip()
+        return self.article.meta_data.get('og', {}).get('title', '').strip() or \
+               self.article.meta_data.get('twitter', {}).get('title', '').strip() or \
+               self.article.title.strip()
 
     def get_description(self):
-        return self.article.summary.strip() or \
-               self.article.meta_description.strip() or \
-               self.article.meta_data.get('og', {}).get('description', '') or \
-               self.article.meta_data.get('twitter', {}).get('description', '')
+        return self.article.meta_data.get('og', {}).get('description', '').strip() or \
+               self.article.meta_data.get('twitter', {}).get('description', '').strip() or \
+               self.article.summary.strip() or \
+               self.article.meta_description.strip()
 
     def get_favicon(self):
         favicon_url = self.article.meta_favicon or \
@@ -96,13 +96,19 @@ class NewspaperFetcher(object):
         img = self.article.meta_data.get('twitter', {}).get('image', '')
         # Sometimes the image is at "twitter:image:src" rather than "twitter:image"
         if isinstance(img, dict):
-            img = img['src']
+            img = img.get('src', '') or img.get('url', '')
+        return img
+
+    def get_facebook_image(self):
+        img = self.article.meta_data.get('og', {}).get('image', '')
+        if isinstance(img, dict):
+            img = img.get('url', '') or img.get('src', '')
         return img
 
     def get_image(self):
-        result = self.article.top_image or \
-                 self.article.meta_data.get('og', {}).get('image', '') or \
-                 self.get_twitter_image()
+        result = self.get_facebook_image() or \
+                 self.get_twitter_image() or \
+                 self.article.top_image
         return self._add_domain(result)
 
     def get_published(self):
