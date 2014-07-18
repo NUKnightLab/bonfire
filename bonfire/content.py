@@ -17,7 +17,7 @@ def extract(url, html=None):
 
     # Check for any flags that newspaper handles poorly.
     if html is None and any(item in url for item in NEWSPAPER_FLAGS):
-        html = requests.get(url, timeout=4).text
+        html = requests.get(url, timeout=7).text
 
     if html is None:
         article.download()
@@ -57,7 +57,7 @@ class NewspaperFetcher(object):
     def _get_resolved_url(self):
         """Fallback in case newspaper can't find a good canonical url."""
         if not self.resolved_url:
-            self.resolved_url = requests.head(self.article.url, timeout=4, allow_redirects=True).url
+            self.resolved_url = requests.head(self.article.url, timeout=7, allow_redirects=True).url
         return self.resolved_url
 
     def _add_domain(self, url):
