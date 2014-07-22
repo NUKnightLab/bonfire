@@ -38,7 +38,11 @@ TWEET_MAPPING = {
         },
         'created': {
             'type': 'date',
-            'format': 'EE MMM d HH:mm:ss Z yyyy'
+            'format': 'EEE MMM d HH:mm:ss Z yyyy'
+        },
+        'id_str': {
+            'type': 'string',
+            'index': 'not_analyzed'
         }
     }
 }
@@ -210,12 +214,19 @@ def set_cached_url(url, resolved_url):
         doc_type=CACHED_URL_DOCUMENT_TYPE, body=body, id=url)
 
 
-def get_universe_tweets(universe, query=None, since=24, size=100):
+def get_universe_tweets(universe, query=None, start=None, end=None, size=100):
     """Gets all tweets in a given universe.
     If query is None, fetches all.
     If query is a string, fetches tweets matching the string's text.
     If query is a dict, uses Elasticsearch Query DSL to parse it
     (http://www.elasticsearch.org/guide/en/elasticsearch/reference/current/query-dsl.html)."""
+    if not end:
+        end = datetime.datetime.utcnow()
+    if start is None:
+        start = 24
+    if isinstance(start, int):
+        start = end - datetime.timedelta(hours=start)
+
     if query is None:
         body = {
             'query': {
@@ -239,8 +250,8 @@ def get_universe_tweets(universe, query=None, since=24, size=100):
     body['filter'] = {
         'range': {
             'created': {
-                'gte': 'now-%dh' % since,
-                'lte': 'now'
+                'gte': format_date(start),
+                'lte': format_date(end)
             }
         }
     }
@@ -262,10 +273,17 @@ def search_content(query, size=100):
         body=body, size=size)
     return [content['_source'] for content in res['hits']['hits']]
 
-def search_universe_content(universe, term, since=24, size=100):
+def search_universe_content(universe, term, start=None, end=None, size=100):
     """Searches tweet text and content text for term matches in a given universe.
     """
     # Search for a) tweets matching the given term, and b) all content URLs in the given time frame
+    if not end:
+        end = datetime.datetime.utcnow()
+    if start is None:
+        start = 24
+    if isinstance(start, int):
+        start = end - datetime.timedelta(hours=start)
+
     body = {
         'filter': {
             'and': [{
@@ -275,8 +293,8 @@ def search_universe_content(universe, term, since=24, size=100):
                 }, {
                 'range': {
                     'created': {
-                        'gte': 'now-%dh' % since,
-                        'lte': 'now'
+                        'gte': format_date(start),
+                        'lte': format_date(end)
                         }
                     }
                 }
@@ -287,8 +305,8 @@ def search_universe_content(universe, term, since=24, size=100):
                 'filter': {
                     'range': {
                         'created': {
-                            'gte': 'now-%dh' % since,
-                            'lte': 'now'
+                            'gte': format_date(start),
+                            'lte': format_date(end)
                         }
                     }
                 },
@@ -382,18 +400,24 @@ def search_universe_content(universe, term, since=24, size=100):
     return top_content
     
 
-def get_popular_content(universe, since=24, size=100):
+def get_popular_content(universe, start=None, end=None, size=100):
     """Gets the most popular URLs shared from a given universe,
     and returns their full content.
     """
+    if not end:
+        end = datetime.datetime.utcnow()
+    if start is None:
+        start = 24
+    if isinstance(start, int):
+        start = end - datetime.timedelta(hours=start)
     body = {
         'aggregations': {
             'recent_tweets': {
                 'filter': {
                     'range': {
                         'created': {
-                            'gte': 'now-%dh' % since,
-                            'lte': 'now'
+                            'gte': format_date(start),
+                            'lte': format_date(end)
                         }
                     }
                 },
@@ -414,6 +438,12 @@ def get_popular_content(universe, since=24, size=100):
                                 'terms': {
                                     'field': 'user_screen_name'
                                 }
+                            },
+                            'tweet_ids': {
+                                'terms': {
+                                    'field': 'id_str',
+                                    'size': 1
+                                }
                             }
                         }
                     }
@@ -429,10 +459,15 @@ def get_popular_content(universe, since=24, size=100):
     if not top_urls:
         return top_urls
     first_tweeted_map = dict([(url['key'], url['first_tweeted']['value']) for url in res])
+    tweet_ids = [url['tweet_ids']['buckets'][0]['key'] for url in res]
 
     # Now query the content index to get the full metadata for these urls.
     content_res = es_management().mget({'ids': top_urls}, 
         index=MANAGEMENT_INDEX, doc_type=CONTENT_DOCUMENT_TYPE)
+
+    # Finally, get tweets related to these urls
+    tweet_res = es(universe).mget({'ids': tweet_ids},
+        index=universe, doc_type=TWEET_DOCUMENT_TYPE)['docs']
     
     top_content = []
     content = filter(lambda c: c['found'], content_res['docs'])
@@ -440,9 +475,22 @@ def get_popular_content(universe, since=24, size=100):
         source = item['_source']
         first_tweeted = first_tweeted_map[source['url']]
         source['first_tweeted'] = format_time(first_tweeted)
+        try:
+            tweet = filter(lambda t: t['_source']['content_url'] == source['url'], tweet_res)[0]
+        except IndexError:
+            source['tweet'] = {}
+        else:
+            source['tweet'] = {
+                'user_screen_name': tweet['_source']['user_screen_name'],
+                'text': tweet['_source']['text'],
+                'user_profile_image_url': tweet['_source']['user_profile_image_url']
+            }
         source['rank'] = index + 1
         top_content.append(source)
     return top_content
+
+def format_date(dt):
+    return dt.strftime('%a %b %d %H:%M:%S +0000 %Y')
 
 def pluralize(word, amt):
     resp = "%d %s" % (amt, word)
