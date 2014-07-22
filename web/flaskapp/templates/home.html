@@ -6,6 +6,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>Bonfire</title>
     <link href="//maxcdn.bootstrapcdn.com/bootstrap/3.2.0/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="http://xdsoft.net/scripts/jquery.datetimepicker.css" />
 
     <!-- HTML5 Shim and Respond.js IE8 support of HTML5 elements and media queries -->
     <!-- WARNING: Respond.js doesn't work if you view the page via file:// -->
@@ -24,14 +25,22 @@
 
         <div id="searchbox">
           <form action="" name="search">
-            Search Tweets and content: <input type="search" name="tweetsearch">
+            Search Tweets and content: <input type="search" name="search">
             <input type="submit">
           </form>
         </div>
 
         <br />
 
-        <div id="sincetoggle">
+        <div id="datetimepicker">
+          <form action="" name="datetimepicker">
+            Start: <input id="startdatepicker" type="text" name="startdate">
+            End: <input id="enddatepicker" type="text" name="enddate">
+            <input type="submit">
+          </form>
+        </div>
+
+<!--         <div id="sincetoggle">
         <form action="" name="sincetoggle">
           <input type="radio" name="since" value="superfresh"> Hour
           <input type="radio" name="since" value="fresh"> 4 Hours
@@ -39,19 +48,36 @@
           <input type="radio" name="since" value="week"> Week 
           <input type="submit">
         </form>
-        </div>
+        </div> -->
 
         <h3>Content</h3>
 
-        <div id="articles">
-        {% for article in content %}
+        <div id="links">
+        {% for link in links %}
           <div class="row">
             <div class="span4">
               <div class="item">
-                <p><a href="{{ article.url }}" target="_blank">{{ article.title }}</a></p>
+                <blockquote class="link-box">
+                <span class="link-rank"><strong>{{ link.rank }}</strong></span>
+                <a href="{{ link.url }}" target="_blank">{{ link.title }}</a>
+                <img src="{{ link.favicon }}" width="16" height="16" class="favicon" />
+                <span class="link-provider"><em>{{ link.provider }}</em></span>
+                <span class="link-first-tweeted">{{ link.first_tweeted }} ago</span>
+                <br />
+                <img src="{{ link.img }}" style="width: 310px; height:162px;" />
+                <hr />
+                {% if link.tweet %}
+                  <div class="twitter-tweet">
+                    <img class="tweet-image" src="{{ link.tweet.user_profile_image_url }}" width="40" height="40" alt="{{ link.tweet.user_screen_name }}'s profile photo" />
+                    <span>@{{ link.tweet.user_screen_name }}: {{ link.tweet.text }}</span>
+                  </div>
+                {% endif %}
+                </blockquote>
               </div>
             </div>
           </div>
+          <br />
+          <br />
         {% endfor %}
         </div>
 
@@ -80,5 +106,24 @@
   <script src="//maxcdn.bootstrapcdn.com/bootstrap/3.2.0/js/bootstrap.min.js"></script>
   <script>!function(d,s,id){var js,fjs=d.getElementsByTagName(s)[0],p=/^http:/.test(d.location)?'http':'https';if(!d.getElementById(id)){js=d.createElement(s);js.id=id;js.src=p+"://platform.twitter.com/widgets.js";fjs.parentNode.insertBefore(js,fjs);}}(document,"script","twitter-wjs");</script>
 
+  <script src="http://xdsoft.net/scripts/jquery.datetimepicker.js"></script>
+  <script type="text/javascript">
+    $(function() {
+      var startDate = "{{ dates.start }}".split(' ')[0]
+      var startTime = "{{ dates.start }}".split(' ')[1]
+      var endDate = "{{ dates.end }}".split(' ')[0]
+      var endTime = "{{ dates.end }}".split(' ')[1]
+      $('#startdatepicker').datetimepicker({
+        defaultDate: startDate,
+        defaultTime: startTime
+      });
+      $('#enddatepicker').datetimepicker({
+        defaultDate: endDate,
+        defaultTime: endTime
+      });
+      $('#startdatepicker').val("{{ dates.start }}")
+      $('#enddatepicker').val("{{ dates.end }}")
+    });
+  </script>
   </body>
 </html>

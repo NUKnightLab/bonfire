@@ -1,5 +1,6 @@
+import datetime
 import time
-from newspaper import Article
+from elasticsearch.exceptions import ConnectionError
 from .db import build_universe_mappings, build_management_mappings, next_unprocessed_tweet, \
                 save_tweet, save_content, get_cached_url, set_cached_url
 from .content import extract
@@ -9,12 +10,26 @@ def process_universe_rawtweets(universe, build_mappings=True):
     if build_mappings:
         build_universe_mappings(universe)
         build_management_mappings()
-    while True:
-        raw_tweet = next_unprocessed_tweet(universe)
-        if raw_tweet:
-            process_rawtweet(universe, raw_tweet)
-        else:
-            time.sleep(10)
+    try:
+        while True:
+            datetime.datetime.utcnow()
+            raw_tweet = next_unprocessed_tweet(universe)
+            if raw_tweet:
+                # Check how far behind the collector we are
+                tweet_created_at = raw_tweet['_source']['created_at'].replace('+0000 ', '')
+                tweet_created = datetime.datetime.strptime(tweet_created_at, '%a %b %d %H:%M:%S %Y')
+                delta = datetime.datetime.utcnow() - tweet_created
+                if delta.seconds > 300:
+                    print 'Processor is %d seconds behind collector' % delta.seconds
+                
+                process_rawtweet(universe, raw_tweet)
+            else:
+                time.sleep(5)
+
+    except ConnectionError:
+        print 'Connection failed; trying to bring it back'
+        time.sleep(5)
+        process_universe_rawtweets(universe)
 
 def process_rawtweet(universe, raw_tweet):
     """Saves a new tweet and extracts metadata from its URLs.
