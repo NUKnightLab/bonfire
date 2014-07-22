@@ -1,11 +1,19 @@
 import time
 import datetime
 from elasticsearch import Elasticsearch
-from elasticsearch.exceptions import NotFoundError
+from elasticsearch.exceptions import NotFoundError, TransportError
 from .config import get_elasticsearch_hosts
 
 MANAGEMENT_INDEX = 'bonfire'
 CONTENT_DOCUMENT_TYPE = 'content'
+CONTENT_MAPPING = {
+    'properties': {
+        'url': {
+            'type': 'string',
+            'index': 'not_analyzed'
+        }
+    }
+}
 CACHED_URL_DOCUMENT_TYPE = 'url'
 CACHED_URL_MAPPING = {
     'properties': {
@@ -82,6 +90,9 @@ def build_management_mappings():
     try:
         es_management().indices.put_mapping(CACHED_URL_DOCUMENT_TYPE,
             CACHED_URL_MAPPING,
+            index=MANAGEMENT_INDEX)
+        es_management().indices.put_mapping(CONTENT_DOCUMENT_TYPE,
+            CONTENT_MAPPING,
             index=MANAGEMENT_INDEX)
     except NotFoundError:
         es_management().indices.create(index=MANAGEMENT_INDEX)
@@ -251,6 +262,126 @@ def search_content(query, size=100):
         body=body, size=size)
     return [content['_source'] for content in res['hits']['hits']]
 
+def search_universe_content(universe, term, since=24, size=100):
+    """Searches tweet text and content text for term matches in a given universe.
+    """
+    # Search for a) tweets matching the given term, and b) all content URLs in the given time frame
+    body = {
+        'filter': {
+            'and': [{
+                'term': {
+                    'text': term
+                    }
+                }, {
+                'range': {
+                    'created': {
+                        'gte': 'now-%dh' % since,
+                        'lte': 'now'
+                        }
+                    }
+                }
+            ]
+        },
+        'aggregations': {
+            'recent_tweets': {
+                'filter': {
+                    'range': {
+                        'created': {
+                            'gte': 'now-%dh' % since,
+                            'lte': 'now'
+                        }
+                    }
+                },
+                'aggregations': {
+                    CONTENT_DOCUMENT_TYPE: {
+                        'terms': {
+                            'field': 'content_url',
+                            'size': size * 10
+                        },
+                        'aggregations': {
+                            'first_tweeted': {
+                                'min': {
+                                    'field': 'created'
+                                }
+                            },
+                            'tweeters': {
+                                'terms': {
+                                    'field': 'user_screen_name'
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+    try:
+        res = es(universe).search(index=universe, doc_type=TWEET_DOCUMENT_TYPE, body=body, size=size)
+    except TransportError:
+        sorted_urls = []
+        first_tweeted_map = {}
+        tweet_urls = set()
+        matching_urls = set()
+    else:
+        aggs = res['aggregations']['recent_tweets'][CONTENT_DOCUMENT_TYPE]['buckets']
+        sorted_res = sorted(aggs, key=lambda r: len(r['tweeters']['buckets']), reverse=True)
+        sorted_urls = [u['key'] for u in sorted_res]
+        first_tweeted_map = dict([(url['key'], url['first_tweeted']['value']) for url in sorted_res])
+        tweet_urls = set([u['key'] for u in aggs])
+        matching_urls = set([u['_source']['content_url'] for u in
+            res['hits']['hits']])
+
+
+    # Now search content database and get all the urls with this term
+    body = {
+        'query': {
+            'match': {
+                'text': term,
+            }
+        },
+        'aggregations': {
+            'urls': {
+                'terms': {
+                    'field': 'url',
+                    'size': size * 10
+                }
+            }
+        }
+    }
+    res = es_management().search(index=MANAGEMENT_INDEX, doc_type=CONTENT_DOCUMENT_TYPE,
+        body=body, size=0)
+    content_urls = set([u['key'] for u in res['aggregations']['urls']['buckets']])
+
+    # Find just the ones within the time frame, then include the ones that matched the tweet text
+    all_urls = (content_urls & tweet_urls) | matching_urls
+    if not all_urls:
+        return []
+
+    # Finally, query the content to get the top 20 links from here
+    content_res = es_management().mget({'ids': list(all_urls)}, 
+        index=MANAGEMENT_INDEX, doc_type=CONTENT_DOCUMENT_TYPE)
+
+    def sort_index(item):
+        try:
+            return sorted_urls.index(item)
+        except ValueError:
+            return -1
+
+    top_content = []
+    content = sorted(filter(lambda c: c['found'], 
+        content_res['docs']), key=lambda x: sort_index(x['_source']['url']), reverse=True)
+    for index, item in enumerate(content):
+        source = item['_source']
+        try:
+            first_tweeted = first_tweeted_map[source['url']]
+        except KeyError:
+            first_tweeted = 0
+        source['first_tweeted'] = format_time(first_tweeted)
+        source['rank'] = index + 1
+        top_content.append(source)
+    return top_content
+    
+
 def get_popular_content(universe, since=24, size=100):
     """Gets the most popular URLs shared from a given universe,
     and returns their full content.
@@ -322,9 +453,8 @@ def pluralize(word, amt):
     return None
 
 def format_time(epoch):
-    now = datetime.datetime.utcnow()
     then = datetime.datetime(*time.gmtime(epoch / 1000)[:7])
-    diff = now - then
+    diff = datetime.datetime.utcnow() - then
     time_map = (
         ('day', diff.days),
         ('hour', diff.seconds / 60 / 60),
