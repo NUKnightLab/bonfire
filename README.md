@@ -36,11 +36,11 @@ For information about installing Elasticsearch, please go to http://elasticsearc
 
 Bonfire comes with some example universes built-in. To see the configuration, and add your own universe configuration, run `bonfire config`. You will need to have your EDITOR environment variable set for this command to work.
 
-Each universe defined by a `[universe:<universe-name>]` section in the configuration file should have its own Twitter application credentials set for `twitter\_consumer\_key`, `twitter\_consumer\_secret`, `twitter\_access\_token`, and `twitter\_access\_token\_secret`. To setup your Twitter applications, login to the Twitter developer console with your Twitter account at https://dev.twitter.com/.
+Each universe defined by a `[universe:<universe-name>]` section in the configuration file should have its own Twitter application credentials set for `twitter_consumer_key`, `twitter_consumer_secret`, `twitter_access_token`, and `twitter_access_token_secret`. To setup your Twitter applications, login to the Twitter developer console with your Twitter account at https://dev.twitter.com/.
 
 ## Externalizing the configuration file
 
-The internal configuration file is provided to get you up-and-running quickly. It is strongly recommended in a real deployment that you externalize the configuration with the `bonfire copyconfig` command. After copying your configuration to an external location, be sure to set the `BONFIRE\_CONFIG` environment variable to point to that location.
+The internal configuration file is provided to get you up-and-running quickly. It is strongly recommended in a real deployment that you externalize the configuration with the `bonfire copyconfig` command. After copying your configuration to an external location, be sure to set the `BONFIRE_CONFIG` environment variable to point to that location.
 
 # Development
 
