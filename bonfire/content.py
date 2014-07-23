@@ -6,6 +6,9 @@ from urlparse import urlparse, urljoin
 # Add to these flags if you want to keep request arguments, etc.
 NEWSPAPER_FLAGS = set(('youtube.com'))
 
+# Known url shortening domains.
+# Newspaper sometimes assumes that shortened domains are canonical, so this
+# list is here to catch any that shouldn't be included.
 SHORT_URLS = set((
     '0rz.tw', '1link.in', '1url.com', '2.gp', '2big.at', '2tu.us', '3.ly',
     '307.to', '4ms.me', '4sq.com', '4url.cc', '6url.com', '7.ly', 'a.gg', 
@@ -65,12 +68,16 @@ SHORT_URLS = set((
     'zi.ma', 'zi.mu', 'zipmyurl.com', 'zud.me', 'zurl.ws', 'zz.gd', 'zzang.kr'
     ))
 
-def get_provider(url):
-    return urlparse(url).netloc.replace('www.', '')
 
 def extract(url, html=None):
-    """Extracts metadata from a URL, and returns a dict result.
-    Skips downloading step if html is provided."""
+    """
+    Extract metadata from a URL, and return a dict result.
+    
+    Uses newspaper `<https://github.com/codelucas/newspaper/>`_,
+    but overrides some defaults in favor of opengraph and twitter elements.
+
+    :arg html: if provided, skip downloading and go straight to parsing html.
+    """
 
     article = Article(url)
 
@@ -85,10 +92,9 @@ def extract(url, html=None):
     article.parse()
     f = NewspaperFetcher(article)
 
-    canonical_url = f.get_canonical_url() or url.rstrip('/')
     result = {
-        'url': canonical_url,
-        'provider': get_provider(canonical_url),
+        'url': f.get_canonical_url() or url.rstrip('/'),
+        'provider': f.get_provider() or '',
         'title': f.get_title() or '',
         'description': f.get_description() or '',
         'text': article.text or '',
@@ -104,6 +110,7 @@ def extract(url, html=None):
     }
     return result
 
+
 class NewspaperFetcher(object):
     """
     Smartly fetches metadata from a newspaper article, and cleans the results.
@@ -116,84 +123,124 @@ class NewspaperFetcher(object):
     def _get_resolved_url(self):
         """Fallback in case newspaper can't find a good canonical url."""
         if not self.resolved_url:
-            self.resolved_url = requests.head(self.article.url, timeout=7, allow_redirects=True).url
+            self.resolved_url = requests.head(self.article.url, 
+                timeout=7, allow_redirects=True).url
         return self.resolved_url
 
     def _add_domain(self, url):
-        """Adds the domain if the URL is relative."""
+        """Add the domain if the URL is relative."""
         if url.startswith('http'):
             return url
-        canonical_url = self.get_canonical_url()
-        parsed_uri = urlparse(canonical_url)
+        parsed_uri = urlparse(self.get_canonical_url())
         domain = "{uri.scheme}://{uri.netloc}".format(uri=parsed_uri)
         return urljoin(domain, url)
 
     def get_canonical_url(self):
-        canonical_url = self.article.meta_data.get('og', {}).get('url', '').strip() or \
-                        self.article.meta_data.get('twitter', {}).get('url', '').strip() or \
+        """
+        Main function for determining the canonical url. Check as follows:
+            - opengraph url (og:url)
+            - twitter url (twitter:url)
+            - newspaper's guess (usually from meta tags)
+
+        If none of these work or newspaper guesses a short-url domain,
+        it gives up and requests the url to get its final redirect.
+        """
+        canonical_url = self.article.meta_data.get('og', {}).get('url', '').strip() or\
+                        self.article.meta_data.get('twitter', {}).get('url', '').strip() or\
                         self.article.canonical_link.strip()
+        # Make sure it's not a short-url domain
         if not canonical_url or urlparse(canonical_url).netloc in SHORT_URLS:
             canonical_url = self._get_resolved_url()
         return canonical_url.rstrip('/')
 
+    def get_provider(self):
+        """Returns a prettified domain for the resource, stripping www."""
+        return urlparse(self.get_canonical_url()).netloc.replace('www.', '')
+
     def get_title(self):
-        return self.article.meta_data.get('og', {}).get('title', '').strip() or \
-               self.article.meta_data.get('twitter', {}).get('title', '').strip() or \
+        """Retrieve title from opengraph, twitter, or meta tags."""
+        return self.article.meta_data.get('og', {}).get('title', '').strip() or\
+               self.article.meta_data.get('twitter', {}).get('title', '').strip() or\
                self.article.title.strip()
 
     def get_description(self):
-        return self.article.meta_data.get('og', {}).get('description', '').strip() or \
-               self.article.meta_data.get('twitter', {}).get('description', '').strip() or \
+        """Retrieve description from opengraph, twitter, or meta tags."""
+        return self.article.meta_data.get('og', {}).get('description', '').strip() or\
+               self.article.meta_data.get('twitter', {}).get('description', '').strip() or\
                self.article.summary.strip() or \
                self.article.meta_description.strip()
 
     def get_favicon(self):
+        """Retrieve favicon url from article tags or from `<http://g.etfv.co>`_"""
         favicon_url = self.article.meta_favicon or \
                       'http://g.etfv.co/%s?defaulticon=none' % self.get_canonical_url()
         return self._add_domain(favicon_url)
 
     def get_twitter_player(self):
+        """Retrieve default player for twitter cards."""
         player = self.article.meta_data.get('twitter', {}).get('player', '')
         if isinstance(player, dict):
             player = player.get('url', '') or player.get('src', '')
         return player
 
     def get_twitter_creator(self):
+        """Retrieve twitter username of the creator."""
         creator = self.article.meta_data.get('twitter', {}).get('creator', '')
         if isinstance(creator, dict):
-            creator = creator.get('url', '') or creator.get('src', '') or creator.get('id', '')
+            creator = creator.get('url', '') or \
+                      creator.get('src', '') or \
+                      creator.get('id', '')
         return creator.lstrip('@')
 
     def get_twitter_image(self):
+        """Retrieve twitter image for the resource."""
         img = self.article.meta_data.get('twitter', {}).get('image', '')
-        # Sometimes the image is at "twitter:image:src" rather than "twitter:image"
+        # Sometimes the image is at twitter:image:src rather than twitter:image
         if isinstance(img, dict):
-            img = img.get('src', '') or img.get('url', '')
+            img = img.get('src', '') or \
+                  img.get('url', '')
         return img
 
     def get_facebook_image(self):
+        """Retrieve opengraph image for the resource."""
         img = self.article.meta_data.get('og', {}).get('image', '')
+        # Sometimes the image is at og:image:url rather than og:image
         if isinstance(img, dict):
-            img = img.get('url', '') or img.get('src', '')
+            img = img.get('url', '') or \
+                  img.get('src', '')
         return img
 
     def get_image(self):
+        """
+        Retrieve a favorite image for the resource, checking in this order:
+            - opengraph
+            - twitter
+            - newspaper's top image.
+        """
         result = self.get_facebook_image() or \
                  self.get_twitter_image() or \
                  self.article.top_image
         return self._add_domain(result)
 
-    def get_published(self):
-        return self.article.published_date.strip() or \
-               self.article.meta_data.get('og', {}).get('article', {}).get('published_time')
-
     def get_authors(self):
+        """Retrieve an author or authors. This works very sporadically."""
         return ', '.join(self.article.authors) or \
                self.article.meta_data.get('og', {}).get('article', {}).get('author', '')
 
+    def get_published(self):
+        """Retrieve a published date. This almost never gets anything."""
+        return self.article.published_date.strip() or \
+               self.article.meta_data.get('og', {}).get('article', {}).get('published_time')
+
     def get_tags(self):
-        """Retrives aggregate of all tags; opengraph tags/sections, keywords, meta_keywords, tags."""
+        """
+        Retrive a comma-separated list of all keywords, categories, and tags, flattened:
+            - opengraph tags + sections
+            - keywords + meta_keywords
+            - tags
+        """
         og_results = self.article.meta_data.get('og', {}).get('tag', '').split(',') + \
                      [self.article.meta_data.get('og', {}).get('section', '')]
-        all_candidates = list(set(self.article.keywords + self.article.meta_keywords + list(self.article.tags) + og_results))
+        all_candidates = list(set(self.article.keywords + \
+            self.article.meta_keywords + list(self.article.tags) + og_results))
         return ', '.join(filter(lambda i: i, all_candidates))

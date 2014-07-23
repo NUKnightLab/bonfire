@@ -6,13 +6,15 @@ from .db import build_universe_mappings, build_management_mappings, next_unproce
 from .content import extract
 
 def process_universe_rawtweets(universe, build_mappings=True):
-    """Takes all unprocessed tweets in given universe, extracts and processes its contents."""
+    """
+    Take all unprocessed tweets in given universe, extract and process their contents.
+    When there are no tweets, sleep until it sees a new one.
+    """
     if build_mappings:
         build_universe_mappings(universe)
         build_management_mappings()
     try:
         while True:
-            datetime.datetime.utcnow()
             raw_tweet = next_unprocessed_tweet(universe)
             if raw_tweet:
                 # Check how far behind the collector we are
@@ -32,8 +34,10 @@ def process_universe_rawtweets(universe, build_mappings=True):
         process_universe_rawtweets(universe)
 
 def process_rawtweet(universe, raw_tweet):
-    """Saves a new tweet and extracts metadata from its URLs.
-    Does not save if there are no URLs."""
+    """
+    Take a raw tweet from the queue, extract and save metadata from its content,
+    then save as a processed tweet.
+    """
 
     # First extract content
     urls = [u['expanded_url'] for u in raw_tweet['_source']['entities']['urls']]
