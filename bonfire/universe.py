@@ -20,7 +20,7 @@ def build_universe(universe, build_mappings=True):
     seed_usernames = get_universe_seed(universe)
 
     authorities = lookup_users(universe, seed_usernames[:14])
-    authorities_ids = set([a.id for a in authorities])
+    authorities_ids = set([a.id_str for a in authorities])
     # Make a flat list of all the authorities and their friends for tallying weights
     all_citizens = list(authorities_ids) + [item for sublist in
         [get_friends(universe, authority_id) for authority_id in authorities_ids]
@@ -28,16 +28,18 @@ def build_universe(universe, build_mappings=True):
 
     # Now run the weight tally
     # Weight is determined by the number of authorities who follow the user
-    cnt = Counter()
+    counter = Counter()
     for citizen_id in all_citizens:
-        cnt[citizen_id] += 1
-    for citizen_id, weight in cnt.items():
+        counter[citizen_id] += 1
+    for citizen_id, num_follows in counter.items():
         if citizen_id in authorities_ids:
             # we want to save the full user object since we have it
-            user = filter(lambda a: a.id == citizen_id, authorities)[0]
+            user = filter(lambda a: a.id_str == citizen_id, authorities)[0]
             # birdy returns a read-only object which we want to write to, so:
             user = dict(user)
+            user['id'] = user['id_str']
         else:
             user = {'id': citizen_id}
-        user['weight'] = weight
+
+        user['weight'] = float(num_follows) / float(len(authorities_ids))
         save_user(universe, user)

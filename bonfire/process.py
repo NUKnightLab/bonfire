@@ -5,6 +5,16 @@ from .db import build_universe_mappings, build_management_mappings, next_unproce
                 save_tweet, save_content, get_cached_url, set_cached_url
 from .content import extract
 
+
+def seconds_since_now(raw_tweet):
+    """Take an unprocessed tweet and return the number of seconds ago 
+    it was created."""
+    tweet_created_at = raw_tweet['_source']['created_at'].replace('+0000 ', '')
+    tweet_created = datetime.datetime.strptime(tweet_created_at, '%a %b %d %H:%M:%S %Y')
+    time_since_now = datetime.datetime.utcnow() - tweet_created
+    return time_since_now.seconds
+
+
 def process_universe_rawtweets(universe, build_mappings=True):
     """
     Take all unprocessed tweets in given universe, extract and process their contents.
@@ -17,21 +27,19 @@ def process_universe_rawtweets(universe, build_mappings=True):
         while True:
             raw_tweet = next_unprocessed_tweet(universe)
             if raw_tweet:
-                # Check how far behind the collector we are
-                tweet_created_at = raw_tweet['_source']['created_at'].replace('+0000 ', '')
-                tweet_created = datetime.datetime.strptime(tweet_created_at, '%a %b %d %H:%M:%S %Y')
-                delta = datetime.datetime.utcnow() - tweet_created
-                if delta.seconds > 300:
-                    print 'Processor is %d seconds behind collector' % delta.seconds
-                
                 process_rawtweet(universe, raw_tweet)
+                # Check how far behind the collector we are
+                if seconds_since_now(raw_tweet) > 300:
+                    print 'Processor is more than 5 minutes behind collector'
             else:
+                # Wait for a new tweet
                 time.sleep(5)
 
     except ConnectionError:
         print 'Connection failed; trying to bring it back'
         time.sleep(5)
         process_universe_rawtweets(universe)
+
 
 def process_rawtweet(universe, raw_tweet):
     """
@@ -57,13 +65,12 @@ def process_rawtweet(universe, raw_tweet):
             save_content(article)
 
     tweet = {
-        'id': raw_tweet['_source']['id'],
-        'id_str': raw_tweet['_source']['id_str'],
+        'id': raw_tweet['_source']['id_str'],
         'text': raw_tweet['_source']['text'],
         'created': raw_tweet['_source']['created_at'],
         'retweet_count': raw_tweet['_source']['retweet_count'],
         #'retweeted_status': raw_tweet['_source']['retweeted_status'],
-        'user_id': raw_tweet['_source']['user']['id'],
+        'user_id': raw_tweet['_source']['user']['id_str'],
         'user_name': raw_tweet['_source']['user']['name'],
         'user_screen_name': raw_tweet['_source']['user']['screen_name'],
         'user_profile_image_url': raw_tweet['_source']['user']['profile_image_url']
@@ -71,4 +78,3 @@ def process_rawtweet(universe, raw_tweet):
     # Add the resolved URL from the extracted content. Only adds tweet's LAST URL.
     tweet['content_url'] = resolved_url
     save_tweet(universe, tweet)
-

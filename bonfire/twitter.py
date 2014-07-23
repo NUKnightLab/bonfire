@@ -32,11 +32,11 @@ def lookup_users(universe, usernames):
 
 def get_friends(universe, user_id):
     """Get Twitter IDs for friends of the given user_id."""
-    return client(universe).api.friends.ids.get(user_id=user_id).data.ids
+    return client(universe).api.friends.ids.get(user_id=user_id, stringify_ids=True).data.ids
 
 
 def collect_universe_tweets(universe):
-    users = set([str(u['_source']['id']) for u in get_universe_users(universe)])
+    users = set([u['_source']['id'] for u in get_universe_users(universe)])
     client = stream_client(universe)
     response = client.stream.statuses.filter.post(follow=','.join(users))
     for tweet in response.stream():

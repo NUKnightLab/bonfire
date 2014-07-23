@@ -4,6 +4,7 @@ from elasticsearch import Elasticsearch
 from elasticsearch.exceptions import NotFoundError, TransportError
 from .config import get_elasticsearch_hosts
 
+
 MANAGEMENT_INDEX = 'bonfire'
 
 # Management index mappings
@@ -33,10 +34,25 @@ CACHED_URL_MAPPING = {
 
 # Universe index mappings
 USER_DOCUMENT_TYPE = 'user'
+USER_MAPPING = {
+    'properties': {
+        'id': {
+            'type': 'string',
+            'index': 'not_analyzed'
+        },
+        'weight': {
+            'type': 'float',
+        }
+    }
+}
 
 TWEET_DOCUMENT_TYPE = 'tweet'
 TWEET_MAPPING = {
     'properties': {
+        'id': {
+            'type': 'string',
+            'index': 'not_analyzed'
+        },
         'content_url': {
             'type': 'string',
             'index': 'not_analyzed'
@@ -44,10 +60,6 @@ TWEET_MAPPING = {
         'created': {
             'type': 'date',
             'format': 'EEE MMM d HH:mm:ss Z yyyy'
-        },
-        'id_str': {
-            'type': 'string',
-            'index': 'not_analyzed'
         },
         'provider': {
             'type': 'string',
@@ -58,16 +70,16 @@ TWEET_MAPPING = {
 
 UNPROCESSED_TWEET_DOCUMENT_TYPE = 'rawtweet'
 UNPROCESSED_TWEET_MAPPING = {
-  'properties': {
-    '_default_': {
-      'type': 'string',
-      'index': 'no'
-    },
-    'id': {
-      'type': 'string',
-      'index': 'not_analyzed'
+    'properties': {
+        '_default_': {
+            'type': 'string',
+            'index': 'no'
+        },
+        'id': {
+            'type': 'string',
+            'index': 'not_analyzed'
+        }
     }
-  }
 }
 
 
@@ -94,6 +106,8 @@ def build_universe_mappings(universe):
     """Create and map the universe index."""
     if not es(universe).indices.exists(universe):
         es(universe).indices.create(index=universe)
+    es(universe).indices.put_mapping(USER_DOCUMENT_TYPE,
+        USER_MAPPING)
     es(universe).indices.put_mapping(TWEET_DOCUMENT_TYPE,
         TWEET_MAPPING)
     es(universe).indices.put_mapping(UNPROCESSED_TWEET_DOCUMENT_TYPE,
@@ -113,8 +127,8 @@ def build_management_mappings():
 
 
 def get_cached_url(url):
-    """Get a resolved URL from the management index. Returns None if URL doesn't
-    exist."""
+    """Get a resolved URL from the management index.
+    Returns None if URL doesn't exist."""
     try:
         return es_management().get_source(index=MANAGEMENT_INDEX, 
             id=url.rstrip('/'), doc_type=CACHED_URL_DOCUMENT_TYPE)['resolved']
@@ -140,18 +154,34 @@ def save_content(content):
         body=content)
 
 
+def user_exists(universe, user):
+    return es(universe).exists(index=universe,
+        id=user['id'], doc_type=USER_DOCUMENT_TYPE)
+
+
 def index_user(universe, user):
     """Add a user to the universe index."""
+    user_id = user.get('id_str') or user['id']
     es(universe).index(index=universe,
         doc_type=USER_DOCUMENT_TYPE,
-        id=user['id'],
+        id=user_id,
         body=user) 
 
 
 def update_user(universe, user):
     """Update a user in the universe index."""
-    es(universe).update(index=universe, doc_type=USER_DOCUMENT_TYPE,
+    es(universe).update(index=universe,
+        doc_type=USER_DOCUMENT_TYPE,
         id=user['id'], body={'doc': user})
+
+
+def save_user(universe, user):
+    """Check if a user exists in the database. If not, create it.
+    Otherwise, If so, update it if need be."""
+    if user_exists(universe, user):
+        update_user(universe, user)
+    else:
+        index_user(universe, user)
 
 
 def get_universe_users(universe, size=5000):
@@ -159,28 +189,6 @@ def get_universe_users(universe, size=5000):
     res = es(universe).search(index=universe, doc_type=USER_DOCUMENT_TYPE,
         body={}, size=size)
     return res['hits']['hits']
-
-
-def get_user(universe, user):
-    """Get a user from the universe index."""
-    return es(universe).get_source(index=universe,
-        doc_type=USER_DOCUMENT_TYPE, id=user['id'])
-
-
-def save_user(universe, user):
-    """Check if a user exists in the database. If not, create it.
-    Otherwise, If so, update it if need be."""
-    try:
-        old_user = get_user(universe, user)
-    except NotFoundError:
-        # Add the new user to the index
-        index_user(universe, user)
-    else:
-        if len(user.keys()) == 1 and len(old_user.keys()) > 1:
-            # We already have user metadata, don't update.
-            pass
-        else:
-            update_user(universe, user)
 
 
 def enqueue_tweet(universe, tweet):
@@ -289,7 +297,7 @@ def search_content(query, size=100):
 
 def search_universe_content(universe, term, start=24, end=None, size=100):
     """
-    Search the text of both tweets and content for a given term in a given universe,
+    Search the text of both tweets and content for a given term and universe,
     and return some links matching one or the other.
 
     NOTE: For now, this does not return links in a meaningful order.
@@ -494,7 +502,7 @@ def get_popular_content(universe, start=24, end=None, size=100):
                             },
                             'tweet_ids': {
                                 'terms': {
-                                    'field': 'id_str',
+                                    'field': 'id',
                                     'size': 1
                                 }
                             }
@@ -516,7 +524,8 @@ def get_popular_content(universe, start=24, end=None, size=100):
         url['first_tweeted']['value']) for url in res])
 
     # The response sorts by total number of tweets, but we the want number of unique people
-    res = sorted(res, key=lambda r: (len(r['tweeters']['buckets'])), reverse=True)[:size]
+    res = sorted(res, 
+        key=lambda r: (len(r['tweeters']['buckets'])), reverse=True)[:size]
 
     # Query the content index to get the full metadata for these urls.
     top_urls = [url['key'] for url in res]
@@ -559,7 +568,7 @@ def get_popular_content(universe, start=24, end=None, size=100):
 
 def get_top_providers(size=2000):
     """
-    Gets a list of all providers (i.e. domains) in order of popularity.
+    Get a list of all providers (i.e. domains) in order of popularity.
     Possible future use for autocomplete, to search across publications.
     """
     body = {
@@ -572,7 +581,11 @@ def get_top_providers(size=2000):
             }
         }
     }
-    res = es_management().search(index=MANAGEMENT_INDEX, doc_type=CONTENT_DOCUMENT_TYPE, body=body, size=0)
+    res = es_management().search(
+        index=MANAGEMENT_INDEX, 
+        doc_type=CONTENT_DOCUMENT_TYPE, 
+        body=body, 
+        size=0)
     return [i['key'] for i in res['aggregations']['providers']['buckets']]
 
 
@@ -583,8 +596,12 @@ def format_date(dt):
 
 
 def get_time_since_now(epoch):
-    """Accepts a unix timestamp, and gets the number of days/hours/minutes/seconds ago as a string.
-    UTC only for now."""
+    """
+    Accepts a unix timestamp, and gets the number of 
+    days/hours/minutes/seconds ago as a string.
+
+    UTC only for now.
+    """
     now = datetime.datetime.utcnow()
     then = datetime.datetime(*time.gmtime(epoch / 1000)[:7])
     diff = now - then
