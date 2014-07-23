@@ -129,7 +129,7 @@ class NewspaperFetcher(object):
 
     def _add_domain(self, url):
         """Add the domain if the URL is relative."""
-        if url.startswith('http'):
+        if not url or url.startswith('http'):
             return url
         parsed_uri = urlparse(self.get_canonical_url())
         domain = "{uri.scheme}://{uri.netloc}".format(uri=parsed_uri)
