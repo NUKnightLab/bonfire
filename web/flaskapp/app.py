@@ -1,14 +1,55 @@
 import sys
 import datetime
 from flask import Flask, render_template, request, jsonify
-from bonfire.db import get_universe_tweets, get_popular_content, search_universe_content
+from bonfire.db import get_universe_tweets, get_links, search_universe_content
 
 app = Flask(__name__)
 
+TIME_FORMAT = '%Y/%m/%d %H:%M'
+
+
 def convert_time(datestr):
-    return datetime.datetime.strptime(datestr, '%Y/%m/%d %H:%M') if datestr else None
+    return datetime.datetime.strptime(datestr, TIME_FORMAT) if datestr else None
+
+
 def time_to_string(dt):
-    return dt.strftime('%Y/%m/%d %H:%M') if dt else ''
+    return dt.strftime(TIME_FORMAT) if dt else ''
+
+
+def clean_params(params):
+    param_map = {
+        'quantity': int,
+        'hours': int,
+        'daterange': tuple,
+        'scoring': bool
+    }
+    cleaned_params = {}
+    for param, val in params.items():
+        if param in param_map:
+            val = param_map[param](val)
+        cleaned_params[param] = val
+    if 'daterange' in cleaned_params:
+        for index, item in cleaned_params['daterange']:
+            cleaned_params['daterange'][index] = convert_time(item)
+    return cleaned_params
+
+
+def create_response(items):
+    response = {
+        'status': 'OK',
+        'result_count': len(items),
+        'items': items
+    }
+    return response
+
+
+@app.route('/get_items.json')
+def get_items():
+    params = clean_params(request.args)
+    links = get_links(universe, **params)
+    response = create_response(links)
+    return jsonify(response)
+
 
 def top_links(since=None, size=20):
     if since is None:
@@ -21,7 +62,7 @@ def top_links(since=None, size=20):
     if request.args.get('search'):
         links = search_universe_content(universe, request.args.get('search'), start=start, end=end, size=size)
     else:
-        links = get_popular_content(universe, start=start, end=end, size=size)
+        links = get_links(universe)
     tweets = get_universe_tweets(universe, request.args.get('search'), start=start, end=end, size=size)
     kwargs = {
         'universe': universe,
