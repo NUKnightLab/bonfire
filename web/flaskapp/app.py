@@ -1,3 +1,4 @@
+#!/usr/bin/env python
 import sys
 import datetime
 from flask import Flask, render_template, request, jsonify

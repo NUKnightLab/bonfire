@@ -1,9 +1,14 @@
 import datetime
+import logging
 import time
 from elasticsearch.exceptions import ConnectionError
 from .db import build_universe_mappings, build_management_mappings, next_unprocessed_tweet, \
                 save_tweet, save_content, get_cached_url, set_cached_url
 from .content import extract
+
+def logger():
+    return  logging.getLogger(__name__)
+
 
 def process_universe_rawtweets(universe, build_mappings=True):
     """Takes all unprocessed tweets in given universe, extracts and processes its contents."""
@@ -20,14 +25,14 @@ def process_universe_rawtweets(universe, build_mappings=True):
                 tweet_created = datetime.datetime.strptime(tweet_created_at, '%a %b %d %H:%M:%S %Y')
                 delta = datetime.datetime.utcnow() - tweet_created
                 if delta.seconds > 300:
-                    print 'Processor is %d seconds behind collector' % delta.seconds
-                
+                    logger().info('Processor is %d seconds behind collector' %
+                        delta.seconds)
                 process_rawtweet(universe, raw_tweet)
             else:
                 time.sleep(5)
 
     except ConnectionError:
-        print 'Connection failed; trying to bring it back'
+        logger().error('Connection failed; trying to bring it back')
         time.sleep(5)
         process_universe_rawtweets(universe)
 
@@ -45,7 +50,8 @@ def process_rawtweet(universe, raw_tweet):
             try:
                 article = extract(url)
             except Exception as e:
-                print "\tFAIL on url %s, message %s" % (url, e.message)
+                logger().error("\tFAIL on url %s, message %s" % (
+                    url, e.message))
                 continue
             resolved_url = article['url']
             # Add it to the URL cache and save it

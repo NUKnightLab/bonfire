@@ -1,5 +1,6 @@
 import collections
 import ConfigParser
+import logging
 import os
 import re
 import sys
@@ -14,10 +15,18 @@ _config = None
 def configuration():
     global _config
     if _config is None:
-        _config = ConfigParser.ConfigParser()
+        #_config = ConfigParser.ConfigParser()
+        _config = ConfigParser.SafeConfigParser()
         with open(config_file_path()) as f:
             _config.readfp(f)
     return _config
+
+
+def get(section, option, default=None):
+    try:
+        return configuration().get(section, option)
+    except ConfigParser.NoOptionError:
+        return default
 
 
 def config_file_path():
@@ -61,3 +70,18 @@ def get_elasticsearch_hosts(universe=None):
         hosts = config.get('universe:%s' % universe, 'elasticsearch_hosts')
     return [s.strip() for s in CONFIG_LIST_REGEX.split(hosts) if s.strip()]
 
+
+def logging_config():
+    config = configuration()
+    try:
+        return {
+            'configfile': get('logging', 'configfile'),
+            'filename': get('logging', 'filename'),
+            'level': get('logging', 'level', 'INFO'),
+            'filemode': get('logging', 'filemode', 'a'),
+            'format': get('logging', 'format',
+                '%(asctime)s - %(name)s - %(levelname)s - %(message)s'),
+            'datefmt': get('logging', 'datefmt'),
+        }
+    except ConfigParser.NoSectionError:
+        return {}

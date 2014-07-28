@@ -1,11 +1,27 @@
 import click
+import logging.config
 import os
 import shutil
 import sys
-from .config import config_file_path, get_universes
+import ConfigParser
+from .config import config_file_path, get_universes, logging_config
 from .universe import build_universe
 from .twitter import collect_universe_tweets
 from .process import process_universe_rawtweets
+
+logconf = logging_config()
+
+if logconf.get('configfile'):
+    configfile = logconf.pop('configfile')
+    try:
+        logging.config.fileConfig(configfile, defaults=logconf)
+    except ConfigParser.NoSectionError, e:
+        print('\nMissing or malformed logging configuration file: %s' %
+            configfile)
+        print(e)
+        sys.exit(0)
+else:
+    logging.basicConfig(**logging_config())
 
 
 def edit_file(filename):

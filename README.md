@@ -83,3 +83,14 @@ The installation and development installation processes above install the bonfir
 ```
 bonfire --help
 ```
+
+# Logging
+Parameters in the [logging] section of the bonfire configuration file are passed to a basicConfig logging configuration. These include
+
+ * filename
+ * level
+ * filemode
+ * format
+ * datefmt
+
+If the [logging] section includes an option called `configfile`, the specified file will be used to setup a fileConfig instead of the basic config. Remaining parameters listed above will be passed to fileConfig as defaults. An example logging config file is provided called `logging.conf.example`.
