@@ -1,3 +1,4 @@
+import math
 import time
 import datetime
 from elasticsearch import Elasticsearch
@@ -451,9 +452,51 @@ def search_universe_content(universe, term, start=24, end=None, size=100):
         source['rank'] = index + 1
         top_content.append(source)
     return top_content
-    
 
-def get_popular_content(universe, start=24, end=None, size=100):
+
+def get_user_weights(universe, user_ids):
+    """Takes a list of user ids and returns a dict with their weighted influence."""
+    users = es(universe).mget({'ids': list(set(user_ids))}, 
+        index=universe, doc_type=USER_DOCUMENT_TYPE)['docs']
+
+    normalize_weight = lambda weight: math.log(weight*10) + 1
+    user_weights = dict([
+        (user['_source']['id'], normalize_weight(user['_source']['weight']))
+        for user in users])
+    return user_weights
+
+
+def score_link(link, user_weights, time_decay=True, hours=24):
+    """Scores a given link returned from elasticsearch.
+
+    :arg link: full elasticsearch result for the link
+    :arg user_weights: a dict with key,value pairs
+        key is the user's id, value is the user's weighted twitter influence
+    :arg time_decay: whether or not to decay the link's score based on time
+    :arg hours: used for determining the decay factor if decay is enabled
+    """
+    score = 0.0
+    score_explanation = []
+    for tweeter in link['tweeters']['buckets']:
+        tweeter_influence = user_weights[tweeter['key']]
+        score += tweeter_influence
+        score_explanation.append(
+            'citizen %s with influence %.3f raises score to %.3f' % \
+            (tweeter['key'], tweeter_influence, score))
+    if time_decay:
+        score_factor = lambda hrs_since: 1 - math.log(hrs_since + 1) / hours
+        first_tweeted = link['first_tweet']['hits']['hits'][0]['sort'][0]
+        time_diff = datetime.datetime.now() - epoch_to_datetime(first_tweeted)
+        hours_since = int(time_diff.total_seconds()) / 60 / 60
+        orig_score = score
+        score *= score_factor(hours_since)
+        score_explanation.append(
+            'decay for %d hours drops score to %.3f (%.3f of original)' %\
+            (hours_since, score, score/orig_score))
+    return score, score_explanation
+
+
+def get_links(universe, quantity=20, hours=24, daterange=None, time_decay=True):
     """
     The default function: gets the most popular links shared 
     from a given universe and time frame.
@@ -464,10 +507,12 @@ def get_popular_content(universe, start=24, end=None, size=100):
     :arg size: number of links to return
     """
 
-    if not end:
-        end = datetime.datetime.utcnow()
-    if isinstance(start, int):
-        start = end - datetime.timedelta(hours=start)
+    if daterange is not None:
+        assert time_decay is False, 'No time decay on a fixed daterange search'
+        start, end = format_date(daterange[0]), format_date(daterange[1])
+    else:
+        start, end = 'now-%dh' % hours, 'now'
+    search_limit = quantity * 5 if time_decay else quantity * 2
 
     # Get the top links in the given time frame, and some extra agg metadata
     body = {
@@ -476,8 +521,8 @@ def get_popular_content(universe, start=24, end=None, size=100):
                 'filter': {
                     'range': {
                         'created': {
-                            'gte': format_date(start),
-                            'lte': format_date(end)
+                            'gte': start,
+                            'lte': end
                         }
                     }
                 },
@@ -485,25 +530,32 @@ def get_popular_content(universe, start=24, end=None, size=100):
                     CONTENT_DOCUMENT_TYPE: {
                         'terms': {
                             'field': 'content_url',
-                            'size': size * 5,
-                            'min_doc_count': 2
+                            # This orders by doc count, but we want the
+                            # number of (unique) users tweeting it, weighted
+                            # by influence. Is there any way to sub-aggregate
+                            # that data and order it here?
+                            'order': {
+                                '_count': 'desc'
+                            },
+                            # Get extra docs because we need to reorder them
+                            'size': search_limit,
+                            'min_doc_count': 2,
                         },
                         'aggregations': {
-                            'first_tweeted': {
-                                'min': {
-                                    'field': 'created'
-                                }
-                            },
                             'tweeters': {
                                 'terms': {
-                                    'field': 'user_screen_name',
+                                    'field': 'user_id',
                                     'size': 1000
                                 }
                             },
-                            'tweet_ids': {
-                                'terms': {
-                                    'field': 'id',
-                                    'size': 1
+                            'first_tweet': {
+                                'top_hits': {
+                                    'size': 1,
+                                    'sort': [{
+                                        'created': {
+                                            'order': 'asc'
+                                        }
+                                    }]
                                 }
                             }
                         }
@@ -514,56 +566,50 @@ def get_popular_content(universe, start=24, end=None, size=100):
     }
     res = es(universe).search(index=universe, doc_type=TWEET_DOCUMENT_TYPE,
         body=body, size=0)
-    res = res['aggregations']['recent_tweets'][CONTENT_DOCUMENT_TYPE]['buckets']
-    if not res:
+    links = res['aggregations']['recent_tweets'][CONTENT_DOCUMENT_TYPE]['buckets']
+    if not links:
         # There's no content in the given time frame
         return []
 
-    # Save for future reference
-    first_tweeted_map = dict([(url['key'], 
-        url['first_tweeted']['value']) for url in res])
+    # Score each link based on its tweeters' relative influences, and time since
+    tweeter_ids = [item for sublist in 
+        [[i['key'] for i in link['tweeters']['buckets']] for link in links] 
+        for item in sublist]
+    user_weights = get_user_weights(universe, tweeter_ids)
+    for link in links:
+        link['score'], link['score_explanation'] = score_link(
+                link, user_weights, time_decay=time_decay, hours=hours)
+    sorted_links = sorted(links, key=lambda link: link['score'], reverse=True)[:quantity]
 
-    # The response sorts by total number of tweets, but we the want number of unique people
-    res = sorted(res, 
-        key=lambda r: (len(r['tweeters']['buckets'])), reverse=True)[:size]
+    # Save the scores so we can return them
+    score_map = dict([(link['key'], (link['score'], link['score_explanation'])) for link in sorted_links])
 
     # Query the content index to get the full metadata for these urls.
-    top_urls = [url['key'] for url in res]
-    content_res = es_management().mget({'ids': top_urls}, 
+    top_urls = [url['key'] for url in sorted_links]
+    link_res = es_management().mget({'ids': top_urls}, 
         index=MANAGEMENT_INDEX, doc_type=CONTENT_DOCUMENT_TYPE)
-    matching_content = filter(lambda c: c['found'], content_res['docs'])
+    matching_links = filter(lambda c: c['found'], link_res['docs'])
 
-    # Also get a sample tweet related to each url
-    related_tweet_ids = [url['tweet_ids']['buckets'][0]['key'] for url in res]
-    related_tweet_res = es(universe).mget({'ids': related_tweet_ids},
-        index=universe, doc_type=TWEET_DOCUMENT_TYPE)['docs']
-    
     # Add some metadata, including the tweet
-    top_content = []
-    for index, item in enumerate(matching_content):
-        source = item['_source']
-
+    top_links = []
+    for index, item in enumerate(matching_links):
+        link = item['_source']
         # Add the link's rank
-        source['rank'] = index + 1
+        link['rank'] = index + 1
 
-        # Add the first time the link was tweeted
-        first_tweeted = first_tweeted_map[source['url']]
-        source['first_tweeted'] = get_time_since_now(first_tweeted)
-
-        try:
-            # Add the sample related tweet we grabbed from the index
-            tweet = filter(lambda t: t['_source']['content_url'] == source['url'], 
-                related_tweet_res)[0]
-        except IndexError:
-            source['tweet'] = {}
-        else:
-            source['tweet'] = {
-                'user_screen_name': tweet['_source']['user_screen_name'],
-                'text': tweet['_source']['text'],
-                'user_profile_image_url': tweet['_source']['user_profile_image_url']
-            }
-        top_content.append(source)
-    return top_content
+        # Add the first time the link was tweeted, and the score
+        link_match = filter(lambda l: l['key'] == link['url'], links)[0]
+        link['score'] = [link_match['score'], link_match['score_explanation']]
+        
+        tweet = link_match['first_tweet']['hits']['hits'][0]
+        link['first_tweeted'] = get_time_since_now(epoch_to_datetime(tweet['sort'][0]))
+        link['tweet'] = {
+            'user_screen_name': tweet['_source']['user_screen_name'],
+            'text': tweet['_source']['text'],
+            'user_profile_image_url': tweet['_source']['user_profile_image_url']
+        }
+        top_links.append(link)
+    return top_links
 
 
 def get_top_providers(size=2000):
@@ -590,21 +636,22 @@ def get_top_providers(size=2000):
 
 
 def format_date(dt):
-    """Convert a datetime to an elasticsearch-formatted datestring.
-    Timezone-unaware, will search in UTC."""
+    """Convert a datetime to an elasticsearch-formatted datestring (UTC)."""
     return dt.strftime('%a %b %d %H:%M:%S +0000 %Y')
 
 
-def get_time_since_now(epoch):
-    """
-    Accepts a unix timestamp, and gets the number of 
-    days/hours/minutes/seconds ago as a string.
+def epoch_to_datetime(epoch):
+    """Converts unix timestamp to python datetime (UTC)."""
+    return datetime.datetime(*time.gmtime(epoch / 1000)[:7])
 
-    UTC only for now.
+
+def get_time_since_now(start_time):
+    """
+    Accepts a UTC datetime, and gets the number of 
+    days/hours/minutes/seconds ago, as a string.
     """
     now = datetime.datetime.utcnow()
-    then = datetime.datetime(*time.gmtime(epoch / 1000)[:7])
-    diff = now - then
+    diff = now - start_time
     time_map = (
         ('day', diff.days),
         ('hour', diff.seconds / 60 / 60),
