@@ -486,7 +486,7 @@ def score_link(link, user_weights, time_decay=True, hours=24):
     if time_decay:
         score_factor = lambda hrs_since: 1 - math.log(hrs_since + 1) / hours
         first_tweeted = link['first_tweet']['hits']['hits'][0]['sort'][0]
-        time_diff = datetime.datetime.now() - epoch_to_datetime(first_tweeted)
+        time_diff = datetime.datetime.utcnow() - epoch_to_datetime(first_tweeted)
         hours_since = int(time_diff.total_seconds()) / 60 / 60
         orig_score = score
         score *= score_factor(hours_since)
