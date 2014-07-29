@@ -421,7 +421,8 @@ def search_universe_content(universe, term, start=24, end=None, size=100):
 
     # Find just the urls within the time frame, 
     # then include the ones that matched the tweet text
-    all_urls = (content_urls & tweet_urls) | matching_urls
+    all_urls = [url for url in (content_urls & tweet_urls) | matching_urls
+        if url]
     if not all_urls:
         return []
 
