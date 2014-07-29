@@ -448,7 +448,7 @@ def search_universe_content(universe, term, start=24, end=None, size=100):
             first_tweeted = first_tweeted_map[source['url']]
         except KeyError:
             first_tweeted = 0
-        source['first_tweeted'] = get_time_since_now(first_tweeted)
+        source['first_tweeted'] = get_time_since_now(epoch_to_datetime(first_tweeted))
         source['rank'] = index + 1
         top_content.append(source)
     return top_content
@@ -501,10 +501,11 @@ def get_links(universe, quantity=20, hours=24, daterange=None, time_decay=True):
     The default function: gets the most popular links shared 
     from a given universe and time frame.
 
-    :arg start: accepts int or datetime (timezone-unaware, UTC)
-        if int, starts at that many number of hours before now
-    :arg end: accepts datetime (timezone-unaware, UTC), defaults to now.
-    :arg size: number of links to return
+    :arg quantity: number of links to return
+    :arg hours: hours since now to search through
+    :arg daterange: list or tuple with start and end dates (python datetimes, UTC)
+        this will override hours, and cannot be used with time_decay
+    :arg time_decay: whether or not to decay the score based on the time of its first tweet
     """
 
     if daterange is not None:
