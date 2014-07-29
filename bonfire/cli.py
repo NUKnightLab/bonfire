@@ -33,7 +33,7 @@ def edit_file(filename):
     os.system('%s %s' % (editor, filename))
 
 
-@click.group()
+@click.group(context_settings={'help_option_names':['-h','--help']})
 def cli():
     """Bonfire application management"""
     pass
@@ -93,11 +93,20 @@ def collect(universe):
     """Collect Tweets for a universe."""
     collect_universe_tweets(universe)
 
+
 @click.command()
 @click.argument('universe')
 def process(universe):
     """Resolve, extract, and save tweets from a universe."""
     process_universe_rawtweets(universe)
+
+
+@click.command()
+@click.pass_context
+def help(ctx):
+    """Show help."""
+    print(ctx.parent.get_help())
+
 
 cli.add_command(config)
 cli.add_command(copyconfig)
@@ -105,3 +114,4 @@ cli.add_command(universes)
 cli.add_command(build)
 cli.add_command(collect)
 cli.add_command(process)
+cli.add_command(help)
