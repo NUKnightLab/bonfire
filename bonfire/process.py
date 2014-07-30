@@ -2,7 +2,7 @@ import datetime
 import logging
 import time
 from elasticsearch.exceptions import ConnectionError
-from .db import build_universe_mappings, build_management_mappings, next_unprocessed_tweet, \
+from .db import build_universe_mappings, next_unprocessed_tweet, \
                 save_tweet, save_content, get_cached_url, set_cached_url
 from .content import extract
 
@@ -26,7 +26,6 @@ def process_universe_rawtweets(universe, build_mappings=True):
     """
     if build_mappings:
         build_universe_mappings(universe)
-        build_management_mappings()
     try:
         while True:
             raw_tweet = next_unprocessed_tweet(universe)
@@ -56,7 +55,7 @@ def process_rawtweet(universe, raw_tweet):
     urls = [u['expanded_url'] for u in raw_tweet['_source']['entities']['urls']]
     for url in urls:
         # Is ths url in our cache?
-        resolved_url = get_cached_url(url)
+        resolved_url = get_cached_url(universe, url)
         if resolved_url is None:
             # No-- go extract it
             try:
@@ -67,8 +66,8 @@ def process_rawtweet(universe, raw_tweet):
                 continue
             resolved_url = article['url']
             # Add it to the URL cache and save it
-            set_cached_url(url, resolved_url)
-            save_content(article)
+            set_cached_url(universe, url, resolved_url)
+            save_content(universe, article)
 
     tweet = {
         'id': raw_tweet['_source']['id_str'],

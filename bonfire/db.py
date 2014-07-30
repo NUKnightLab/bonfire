@@ -6,19 +6,7 @@ from elasticsearch.exceptions import NotFoundError, TransportError
 from .config import get_elasticsearch_hosts
 
 
-MANAGEMENT_INDEX = 'bonfire'
-
-# Management index mappings
-CONTENT_DOCUMENT_TYPE = 'content'
-CONTENT_MAPPING = {
-    'properties': {
-        'url': {
-            'type': 'string',
-            'index': 'not_analyzed'
-        }
-    }
-}
-
+URL_CACHE_INDEX = 'bonfire_url_cache'
 CACHED_URL_DOCUMENT_TYPE = 'url'
 CACHED_URL_MAPPING = {
     'properties': {
@@ -33,7 +21,6 @@ CACHED_URL_MAPPING = {
     }
 }
 
-# Universe index mappings
 USER_DOCUMENT_TYPE = 'user'
 USER_MAPPING = {
     'properties': {
@@ -43,6 +30,16 @@ USER_MAPPING = {
         },
         'weight': {
             'type': 'float',
+        }
+    }
+}
+
+CONTENT_DOCUMENT_TYPE = 'content'
+CONTENT_MAPPING = {
+    'properties': {
+        'url': {
+            'type': 'string',
+            'index': 'not_analyzed'
         }
     }
 }
@@ -94,62 +91,54 @@ def es(universe):
     return _es_connections[universe]
 
 
-def es_management():
-    """Return Elasticsearch connection for the management index."""
-    global _es_connections
-    if not MANAGEMENT_INDEX in _es_connections:
-        _es_connections[MANAGEMENT_INDEX] = Elasticsearch(
-            hosts=get_elasticsearch_hosts())
-    return _es_connections[MANAGEMENT_INDEX]
-
-
 def build_universe_mappings(universe):
     """Create and map the universe index."""
     if not es(universe).indices.exists(universe):
         es(universe).indices.create(index=universe)
-    es(universe).indices.put_mapping(USER_DOCUMENT_TYPE,
-        USER_MAPPING)
-    es(universe).indices.put_mapping(TWEET_DOCUMENT_TYPE,
-        TWEET_MAPPING)
-    es(universe).indices.put_mapping(UNPROCESSED_TWEET_DOCUMENT_TYPE,
-        UNPROCESSED_TWEET_MAPPING)
+    if not es(universe).indices.exists(URL_CACHE_INDEX):
+        es(universe).indices.create(index=URL_CACHE_INDEX)
 
-
-def build_management_mappings():
-    """Create and map the management index."""
-    if not es_management().indices.exists(MANAGEMENT_INDEX):
-        es_management().indices.create(index=MANAGEMENT_INDEX)
-    es_management().indices.put_mapping(CACHED_URL_DOCUMENT_TYPE,
+    es(universe).indices.put_mapping(CACHED_URL_DOCUMENT_TYPE,
         CACHED_URL_MAPPING,
-        index=MANAGEMENT_INDEX)
-    es_management().indices.put_mapping(CONTENT_DOCUMENT_TYPE,
+        index=URL_CACHE_INDEX)
+
+    es(universe).indices.put_mapping(USER_DOCUMENT_TYPE,
+        USER_MAPPING,
+        index=universe)
+    es(universe).indices.put_mapping(CONTENT_DOCUMENT_TYPE,
         CONTENT_MAPPING,
-        index=MANAGEMENT_INDEX)
+        index=universe)
+    es(universe).indices.put_mapping(TWEET_DOCUMENT_TYPE,
+        TWEET_MAPPING,
+        index=universe)
+    es(universe).indices.put_mapping(UNPROCESSED_TWEET_DOCUMENT_TYPE,
+        UNPROCESSED_TWEET_MAPPING,
+        index=universe)
 
 
-def get_cached_url(url):
-    """Get a resolved URL from the management index.
+def get_cached_url(universe, url):
+    """Get a resolved URL from the index.
     Returns None if URL doesn't exist."""
     try:
-        return es_management().get_source(index=MANAGEMENT_INDEX, 
+        return es(universe).get_source(index=URL_CACHE_INDEX, 
             id=url.rstrip('/'), doc_type=CACHED_URL_DOCUMENT_TYPE)['resolved']
     except NotFoundError:
         return None
 
 
-def set_cached_url(url, resolved_url):
+def set_cached_url(universe, url, resolved_url):
     """Index a URL and its resolution in Elasticsearch"""
     body = {
         'url': url.rstrip('/'),
         'resolved': resolved_url.rstrip('/')
     }
-    es_management().index(index=MANAGEMENT_INDEX,
+    es(universe).index(index=URL_CACHE_INDEX,
         doc_type=CACHED_URL_DOCUMENT_TYPE, body=body, id=url)
 
 
-def save_content(content):
-    """Save the content of a URL to the management index."""
-    es_management().index(index=MANAGEMENT_INDEX,
+def save_content(universe, content):
+    """Save the content of a URL to the index."""
+    es(universe).index(index=universe,
         doc_type=CONTENT_DOCUMENT_TYPE,
         id=content['url'],
         body=content)
@@ -272,7 +261,7 @@ def get_universe_tweets(universe, query=None, start=24, end=None, size=100):
     return [tweet['_source'] for tweet in res['hits']['hits']]
 
 
-def search_content(query, size=100):
+def search_content(universe, query, size=100):
     """
     Search fulltext of all content across universes for a given string, 
     or a custom match query.
@@ -291,7 +280,7 @@ def search_content(query, size=100):
             'match': query
         }
     }
-    res = es_management().search(index=MANAGEMENT_INDEX, doc_type=CONTENT_DOCUMENT_TYPE,
+    res = es(universe).search(index=universe, doc_type=CONTENT_DOCUMENT_TYPE,
         body=body, size=size)
     return [content['_source'] for content in res['hits']['hits']]
 
@@ -586,10 +575,10 @@ def get_links(universe, quantity=20, hours=24, daterange=None, time_decay=True):
     # Save the scores so we can return them
     score_map = dict([(link['key'], (link['score'], link['score_explanation'])) for link in sorted_links])
 
-    # Query the content index to get the full metadata for these urls.
+    # Get the full metadata for these urls.
     top_urls = [url['key'] for url in sorted_links]
-    link_res = es_management().mget({'ids': top_urls}, 
-        index=MANAGEMENT_INDEX, doc_type=CONTENT_DOCUMENT_TYPE)
+    link_res = es(universe).mget({'ids': top_urls}, 
+        index=universe, doc_type=CONTENT_DOCUMENT_TYPE)
     matching_links = filter(lambda c: c['found'], link_res['docs'])
 
     # Add some metadata, including the tweet
@@ -614,7 +603,7 @@ def get_links(universe, quantity=20, hours=24, daterange=None, time_decay=True):
     return top_links
 
 
-def get_top_providers(size=2000):
+def get_top_providers(universe, size=2000):
     """
     Get a list of all providers (i.e. domains) in order of popularity.
     Possible future use for autocomplete, to search across publications.
@@ -629,8 +618,8 @@ def get_top_providers(size=2000):
             }
         }
     }
-    res = es_management().search(
-        index=MANAGEMENT_INDEX, 
+    res = es(universe).search(
+        index=universe, 
         doc_type=CONTENT_DOCUMENT_TYPE, 
         body=body, 
         size=0)
