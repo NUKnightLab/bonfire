@@ -59,13 +59,15 @@
               <div class="item">
                 <blockquote class="link-box">
                 <span class="link-rank"><strong>{{ link.rank }}</strong></span>
-                <a href="{{ link.url }}" target="_blank">{{ link.title }}</a>
-                <img src="{{ link.favicon }}" width="16" height="16" class="favicon" />
-                <span class="link-provider"><em>{{ link.provider }}</em></span>
-                <span class="link-first-tweeted">{{ link.first_tweeted }} ago</span>
-                <br />
-                <img src="{{ link.img }}" style="width: 310px; height:162px;" />
-                <hr />
+                {% if link.title %}
+                  <a href="{{ link.url }}" target="_blank">{{ link.title }}</a>
+                  <img src="{{ link.favicon }}" width="16" height="16" class="favicon" />
+                  <span class="link-provider"><em>{{ link.provider }}</em></span>
+                  <span class="link-first-tweeted">{{ link.first_tweeted }} ago</span>
+                  <br />
+                  <img src="{{ link.img }}" style="width: 310px; height:162px;" />
+                  <hr />
+                {% endif %}
                 {% if link.tweet %}
                   <div class="twitter-tweet">
                     <img class="tweet-image" src="{{ link.tweet.user_profile_image_url }}" width="40" height="40" alt="{{ link.tweet.user_screen_name }}'s profile photo" />

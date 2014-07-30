@@ -2,7 +2,7 @@
 import sys
 import datetime
 from flask import Flask, render_template, request, jsonify
-from bonfire.db import get_universe_tweets, get_links, search_universe_content
+from bonfire.db import get_universe_tweets, get_items, search_items
 
 app = Flask(__name__)
 
@@ -19,6 +19,7 @@ def time_to_string(dt):
 
 def clean_params(params):
     param_map = {
+        'term': str,
         'quantity': int,
         'hours': int,
         'daterange': tuple,
@@ -45,14 +46,23 @@ def create_response(items):
 
 
 @app.route('/get_items.json')
-def get_items():
+def get_items_json():
     params = clean_params(request.args)
-    links = get_links(universe, **params)
+    links = get_items(universe, **params)
     response = create_response(links)
     return jsonify(response)
 
 
-def top_links(since=None, size=20):
+@app.route('/search_items.json')
+def search_items_json():
+    params = clean_params(request.args)
+    args = [params.pop('term')]
+    links = search_items(universe, *args, **params)
+    response = create_response(links)
+    return jsonify(response)
+
+
+def top_links(since=None, quantity=20):
     if since is None:
         start = convert_time(request.args.get('startdate'))
         end = convert_time(request.args.get('enddate'))
@@ -61,10 +71,10 @@ def top_links(since=None, size=20):
         start = end - datetime.timedelta(hours=since)
 
     if request.args.get('search'):
-        links = search_universe_content(universe, request.args.get('search'), start=start, end=end, size=size)
+        links = search_items(universe, request.args.get('search'), quantity=quantity)
     else:
-        links = get_links(universe)
-    tweets = get_universe_tweets(universe, request.args.get('search'), start=start, end=end, size=size)
+        links = get_items(universe, quantity=quantity)
+    tweets = get_universe_tweets(universe, request.args.get('search'), start=start, end=end, size=quantity)
     kwargs = {
         'universe': universe,
         'tweets': tweets,
