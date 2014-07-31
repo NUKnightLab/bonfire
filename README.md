@@ -102,10 +102,6 @@ bonfire --help
 # Logging
 Parameters in the [logging] section of the bonfire configuration file are passed to a basicConfig logging configuration. These include
 
-# Flask Web Application
-
-There is an example web application in bonfire/web/flaskapp. To run this you will need to install Flask: `pip install flask`.
-
  * filename
  * level
  * filemode
@@ -113,3 +109,7 @@ There is an example web application in bonfire/web/flaskapp. To run this you wil
  * datefmt
 
 If the [logging] section includes an option called `configfile`, the specified file will be used to setup a fileConfig instead of the basic config. Remaining parameters listed above will be passed to fileConfig as defaults. An example logging config file is provided called `logging.conf.example`.
+
+# Flask Web Application
+
+There is an example web application in bonfire/web/flaskapp. To run this you will need to install Flask: `pip install flask`.
