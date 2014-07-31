@@ -144,41 +144,51 @@ def save_content(universe, content):
         body=content)
 
 
-def user_exists(universe, user):
-    return es(universe).exists(index=universe,
-        id=user['id'], doc_type=USER_DOCUMENT_TYPE)
-
-
-def index_user(universe, user):
-    """Add a user to the universe index."""
-    user_id = user.get('id_str') or user['id']
-    es(universe).index(index=universe,
-        doc_type=USER_DOCUMENT_TYPE,
-        id=user_id,
-        body=user) 
-
-
-def update_user(universe, user):
-    """Update a user in the universe index."""
-    es(universe).update(index=universe,
-        doc_type=USER_DOCUMENT_TYPE,
-        id=user['id'], body={'doc': user})
+def delete_user(universe, user_id):
+    """Delete a user from the universe index by their id."""
+    es(universe).delete(index=universe, 
+        doc_type=USER_DOCUMENT_TYPE, id=user_id)
 
 
 def save_user(universe, user):
     """Check if a user exists in the database. If not, create it.
-    Otherwise, If so, update it if need be."""
-    if user_exists(universe, user):
-        update_user(universe, user)
+    If so, update it."""
+    kwargs = {
+        'index': universe,
+        'doc_type': USER_DOCUMENT_TYPE,
+        'id': user.get('id_str', user.get('id')),
+    }
+    if es(universe).exists(**kwargs):
+        kwargs['body'] = {'doc': user}
+        es(universe).update(**kwargs)
     else:
-        index_user(universe, user)
+        kwargs['body'] = user
+        es(universe).index(**kwargs)
 
 
-def get_universe_users(universe, size=5000):
-    """Get users for the universe."""
-    res = es(universe).search(index=universe, doc_type=USER_DOCUMENT_TYPE,
-        body={}, size=size)
-    return res['hits']['hits']
+def get_user_ids(universe, size=None):
+    """Get top users for the universe by weight.
+    :arg size: number of users to get. Defaults to all users."""
+    body = {
+        'sort': [{
+            'weight': {
+                'order': 'desc'
+            }
+        }]
+    }
+    chunk_size = size or 5000
+    start = 0
+    user_ids = []
+    while True:
+        res = es(universe).search(index=universe, doc_type=USER_DOCUMENT_TYPE,
+            body=body, size=chunk_size, from_=start, _source=False)
+        user_ids.extend([u['_id'] for u in res['hits']['hits']])
+        if size is None:
+            size = res['hits']['total']
+        start += chunk_size
+        if start >= size:
+            break
+    return user_ids
 
 
 def enqueue_tweet(universe, tweet):
@@ -291,7 +301,7 @@ def search_items(universe, term, quantity=100):
     and return some items matching one or the other.
 
     :arg term: search term to use for querying both tweets and content
-    :arg size: number of items to return
+    :arg quantity: number of items to return
     """
 
     # Search tweets and content for the given term
@@ -345,8 +355,9 @@ def search_items(universe, term, quantity=100):
 
 def get_user_weights(universe, user_ids):
     """Takes a list of user ids and returns a dict with their weighted influence."""
-    users = es(universe).mget({'ids': list(set(user_ids))}, 
+    res = es(universe).mget({'ids': list(set(user_ids))}, 
         index=universe, doc_type=USER_DOCUMENT_TYPE)['docs']
+    users = filter(lambda u: u['found'], res)
 
     normalize_weight = lambda weight: math.log(weight*10) + 1
     user_weights = dict([
@@ -367,7 +378,8 @@ def score_link(link, user_weights, time_decay=True, hours=24):
     score = 0.0
     score_explanation = []
     for tweeter in link['tweeters']['buckets']:
-        tweeter_influence = user_weights[tweeter['key']]
+        # if they aren't in user_weights, they're no longer in the universe
+        tweeter_influence = user_weights.get(tweeter['key'], 0.0)
         score += tweeter_influence
         score_explanation.append(
             'citizen %s with influence %.3f raises score to %.3f' % \

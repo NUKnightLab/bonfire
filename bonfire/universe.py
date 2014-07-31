@@ -2,13 +2,15 @@ import os
 import sys
 from collections import Counter
 from .twitter import lookup_users, get_friends
-from .db import save_user, build_universe_mappings
+from .db import build_universe_mappings, get_user_ids, save_user, delete_user
 from .config import get_universe_seed
 
 
 def build_universe(universe, build_mappings=True):
     """Expand the universe from the seed user list in the universe file.
     Should only be called once every 15 minutes.
+
+    This command also functions as an update of a universe.
 
     Seed is currently limited to the first 14 users in the file. API threshold
     limit is 15 calls per 15 minutes, and we need an extra call for
@@ -27,7 +29,7 @@ def build_universe(universe, build_mappings=True):
         for item in sublist]
 
     # Now run the weight tally
-    # Weight is determined by the number of authorities who follow the user
+    # Weight is determined by the percentage of authorities who follow the user
     counter = Counter()
     for citizen_id in all_citizens:
         counter[citizen_id] += 1
@@ -43,3 +45,8 @@ def build_universe(universe, build_mappings=True):
 
         user['weight'] = float(num_follows) / float(len(authorities_ids))
         save_user(universe, user)
+
+    # Clean up any users that used to be in the universe.
+    obsolete_users = set(get_user_ids(universe)) - set(all_citizens)
+    for user in obsolete_users:
+        delete_user(universe, user)
