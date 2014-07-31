@@ -24,6 +24,21 @@ This will install the bonfire command line tool and dependencies except for the 
 
 *Important:* Do not run pip install with the `--upgrade` option unless you have copied your configuration changes to an external location. `pip install --upgrade` will overwrite the current internal configuration.
 
+## Installation errors
+
+Do not ignore pip install errors. If you see something like this:
+
+```
+error: command 'gcc' failed with exit status 1
+```
+
+The likely culprits are lxml and Pillow, which are both dependencies for Newspaper, a library that Bonfire uses for article extraction from web pages.
+
+For further info on getting lxml installed, go here: http://lxml.de/installation.html#installation
+
+For Pillow installation: http://pillow.readthedocs.org/en/latest/installation.html
+
+
 ## Elasticsearch Python client library
 
 The Elasticsearch Python client source is available at: https://github.com/elasticsearch/elasticsearch-py. This needs to be installed separately.
@@ -86,6 +101,10 @@ bonfire --help
 
 # Logging
 Parameters in the [logging] section of the bonfire configuration file are passed to a basicConfig logging configuration. These include
+
+# Flask Web Application
+
+There is an example web application in bonfire/web/flaskapp. To run this you will need to install Flask: `pip install flask`.
 
  * filename
  * level
