@@ -20,7 +20,7 @@ Within the cloned repo, run:
 pip install .
 ```
 
-This will install the bonfire command line tool and dependencies except for the Elasticsearch database and the Elasticsearch Python client library.
+This will install the bonfire command line tool and dependencies.
 
 *Important:* Do not run pip install with the `--upgrade` option unless you have copied your configuration changes to an external location. `pip install --upgrade` will overwrite the current internal configuration.
 
@@ -38,10 +38,6 @@ For further info on getting lxml installed, go here: http://lxml.de/installation
 
 For Pillow installation: http://pillow.readthedocs.org/en/latest/installation.html
 
-
-## Elasticsearch Python client library
-
-The Elasticsearch Python client source is available at: https://github.com/elasticsearch/elasticsearch-py. This needs to be installed separately.
 
 ## Elasticsearch
 
@@ -66,20 +62,13 @@ a virtualenvironment):
 pip install --editable .
 ```
 
-This will install the bonfire command line tool, and dependencies except for the Elasticsearch Python client, and the bonfire.cfg config file setup.
+This will install the bonfire command line tool, and dependencies.
 
-## Elasticsearch client
-
-For development, you should have Elasticsearch (version 1.0.1) running and accessible from your development host.
 
 ## Bonfire config
 
 If Bonfire is installed as --editable for local development, setup will not copy the bonfire.cfg file into the environment. Either copy bonfire.cfg from the repo to config/bonfire.cfg relative to your environment root, or to a location specified by the BONFIRE_CONFIG environment variable. If you are making development changes to the repo copy of bonfire.cfg, set BONFIRE_CONFIG to point directly to the repo file.
 
-
-## Elasticsearch client
-
-We are currently using the Elasticsearch Python client version 1.0.1 which is not available in PyPi. Install from source by running python setup.py. The Elasticsearch Python client source is available at: https://github.com/elasticsearch/elasticsearch-py. 
 
 # Testing
 

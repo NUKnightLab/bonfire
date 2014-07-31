@@ -16,6 +16,7 @@ setup(
         'Click',
         'newspaper',
         'birdy',
+        'elasticsearch',
     ],
     data_files=[(expanduser('~'), ['bonfire.cfg'])],
     entry_points="""
