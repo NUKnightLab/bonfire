@@ -4,12 +4,22 @@ import os
 import shutil
 import sys
 import ConfigParser
-from .config import config_file_path, get_universes, logging_config
+from .config import (
+    config_file_path,
+    get_universes,
+    logging_config,
+    get_universes )
 from .universe import build_universe
 from .twitter import collect_universe_tweets
 from .process import process_universe_rawtweets
 
 logconf = logging_config()
+UNIVERSES = get_universes()
+if len(UNIVERSES) == 1:
+    DEFAULT_UNIVERSE = UNIVERSES[0]
+else:
+    DEFAULT_UNIVERSE = None
+
 
 if logconf.get('configfile'):
     configfile = logconf.pop('configfile')
@@ -58,23 +68,29 @@ def universes():
 
 
 @click.command()
-@click.argument('universe')
+@click.argument('universe', default=DEFAULT_UNIVERSE,
+    type=click.Choice(UNIVERSES))
 def build(universe):
     """Build a universe from configured seed."""
+    click.echo('Building universe: %s' % universe)
     build_universe(universe)
 
 
 @click.command()
-@click.argument('universe')
+@click.argument('universe', default=DEFAULT_UNIVERSE,
+    type=click.Choice(UNIVERSES))
 def collect(universe):
     """Collect Tweets for a universe."""
+    click.echo('Collecting universe: %s' % universe)
     collect_universe_tweets(universe)
 
 
 @click.command()
-@click.argument('universe')
+@click.argument('universe', default=DEFAULT_UNIVERSE,
+    type=click.Choice(UNIVERSES))
 def process(universe):
     """Resolve, extract, and save tweets from a universe."""
+    click.echo('Processing universe: %s' % universe)
     process_universe_rawtweets(universe)
 
 
