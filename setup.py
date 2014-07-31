@@ -1,9 +1,7 @@
 """
 Install with `pip install .`
 
-WARNING: pip install with `--upgrade` option will overwrite the currently
-installed internal configuration. It is recommended that you run
-`bonfire copyconfig` to externalize your configuration file.
+Installs bonfire commands. Writes bonfire.cfg config file to home directory.
 """
 from os.path import expanduser
 from setuptools import setup, find_packages 
@@ -19,7 +17,7 @@ setup(
         'newspaper',
         'birdy',
     ],
-    data_files=[('config', ['bonfire.cfg'])],
+    data_files=[(expanduser('~'), ['bonfire.cfg'])],
     entry_points="""
         [console_scripts]
         bonfire=bonfire.cli:cli

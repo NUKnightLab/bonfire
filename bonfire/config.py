@@ -4,10 +4,11 @@ import logging
 import os
 import re
 import sys
+from os.path import expanduser
 
 BONFIRE_CONFIG_ENV_VAR = 'BONFIRE_CONFIG'
-INTERNAL_CONFIG_DIR = 'config'
-INTERNAL_CONFIG_FILE = 'bonfire.cfg'
+DEFAULT_CONFIG_DIR = expanduser('~')
+DEFAULT_CONFIG_FILE = 'bonfire.cfg'
 CONFIG_LIST_REGEX = re.compile(r'[, \s]+')
 
 
@@ -31,7 +32,7 @@ def get(section, option, default=None):
 
 def config_file_path():
     return os.getenv(BONFIRE_CONFIG_ENV_VAR,
-        os.path.join(sys.prefix, INTERNAL_CONFIG_DIR, INTERNAL_CONFIG_FILE))
+        os.path.join(DEFAULT_CONFIG_DIR, DEFAULT_CONFIG_FILE))
     
 
 def get_universe_seed(universe):
