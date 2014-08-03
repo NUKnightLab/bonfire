@@ -2,19 +2,20 @@
 import sys
 import datetime
 from flask import Flask, render_template, request, jsonify
-from bonfire.db import get_universe_tweets, get_items, search_items
+from werkzeug.contrib.atom import AtomFeed
+from bonfire.db import get_universe_tweets, get_items, search_items, get_recent_top_links
 
 app = Flask(__name__)
 
 TIME_FORMAT = '%Y/%m/%d %H:%M'
 
 
-def convert_time(datestr):
-    return datetime.datetime.strptime(datestr, TIME_FORMAT) if datestr else None
+def convert_time(datestr, time_format=TIME_FORMAT):
+    return datetime.datetime.strptime(datestr, time_format) if datestr else None
 
 
-def time_to_string(dt):
-    return dt.strftime(TIME_FORMAT) if dt else ''
+def time_to_string(dt, time_format=TIME_FORMAT):
+    return dt.strftime(time_format) if dt else ''
 
 
 def clean_params(params):
@@ -113,6 +114,25 @@ def fresh():
 @app.route("/week.json")
 def week():
     return top_links(since=24 * 7)
+
+
+@app.route("/feed/")
+def feed():
+    feed = AtomFeed('Top links in %s' % universe,
+        feed_url=request.url, url=request.url_root)
+    links = get_recent_top_links(universe, quantity=20)
+    for link in links:
+        author = link['authors']
+        if not author:
+            author = link['twitter_creator'] or link['tweet']['user_screen_name']
+            if not author.startswith('@'):
+                author = '@' + author
+        updated = convert_time(link['tweet']['created'].replace('+0000 ', ''), '%a %b %d %H:%M:%S %Y')
+        feed.add(link['title'], unicode(link['description']),
+            url=link['url'],
+            updated=updated
+            )
+    return feed.get_response()
 
 
 USAGE = """

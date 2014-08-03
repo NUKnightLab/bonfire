@@ -49,6 +49,22 @@ CACHED_URL_MAPPING = {
 
 TOP_CONTENT_INDEX = 'bonfire_top_content'
 TOP_CONTENT_DOCUMENT_TYPE = 'top_content'
+TOP_CONTENT_MAPPING = {
+    'properties': {
+        '_default_': {
+            'type': 'string',
+            'index': 'no'
+        },
+        'tweet': {
+            'properties': {
+                'created': {
+                    'type': 'date',
+                    'format': 'EEE MMM d HH:mm:ss Z yyyy'
+                }
+            }
+        }
+    }
+}
 
 USER_DOCUMENT_TYPE = 'user'
 USER_MAPPING = {
@@ -137,6 +153,9 @@ def build_universe_mappings(universe):
     es(universe).indices.put_mapping(RESULTS_CACHE_DOCUMENT_TYPE,
         RESULTS_CACHE_MAPPING,
         index=RESULTS_CACHE_INDEX)
+    es(universe).indices.put_mapping(TOP_CONTENT_DOCUMENT_TYPE,
+        TOP_CONTENT_MAPPING,
+        index=TOP_CONTENT_INDEX)
 
     es(universe).indices.put_mapping(USER_DOCUMENT_TYPE,
         USER_MAPPING,
@@ -170,6 +189,85 @@ def set_cached_url(universe, url, resolved_url):
     }
     es(universe).index(index=URL_CACHE_INDEX,
         doc_type=CACHED_URL_DOCUMENT_TYPE, body=body, id=url)
+
+
+
+def add_to_results_cache(universe, hours, results):
+    body = {
+        'cached_at': format_date(datetime.datetime.utcnow()),
+        'hours_since': hours,
+        'results': results
+    }
+    es(universe).index(
+        index=RESULTS_CACHE_INDEX,
+        doc_type=RESULTS_CACHE_DOCUMENT_TYPE,
+        body=body)
+
+
+def get_score_stats(universe, hours=4):
+    body = {
+        'aggregations': {
+            'fresh_queries': {
+                'filter': {
+                    'term': {
+                        'hours_since': hours
+                    }
+                },
+                'aggregations': {
+                    'scores': {
+                        'extended_stats': {
+                            'field': 'score'
+                        }
+                    }
+                }
+            }
+        }
+    }
+    res = es(universe).search(
+        index=RESULTS_CACHE_INDEX, 
+        doc_type=RESULTS_CACHE_DOCUMENT_TYPE, 
+        body=body)
+    return res['aggregations']['fresh_queries']['scores']
+
+
+def get_top_link(universe, hours=4, quantity=5):
+    """Search for any links in the current set that are a high enough score
+    to get into top links. Return one (and only one) if so."""
+    try:
+        top_links = get_items(universe, hours=hours, quantity=quantity)
+    except IndexError:
+        return None
+    score_stats = get_score_stats(universe, hours=hours)
+    # Treat a link as a top link if it's > 2 standard devs above the average
+    cutoff = score_stats['avg'] + (2 * score_stats['std_deviation'])
+    link_is_already_top = lambda link: es(universe).exists(
+        index=TOP_CONTENT_INDEX, doc_type=TOP_CONTENT_DOCUMENT_TYPE, id=link['url'])
+    for link in top_links:
+        if link['score'] >= cutoff and not link_is_already_top(link):
+            # We only want one at a time even if more than 1 are in the results
+            return link
+    return None
+
+
+def add_to_top_links(universe, link):
+    es(universe).index(
+        index=TOP_CONTENT_INDEX, 
+        doc_type=TOP_CONTENT_DOCUMENT_TYPE,
+        id=link['url'],
+        body=link)
+
+
+def get_recent_top_links(universe, quantity=20):
+    body = {
+        'sort': [{
+            'tweet.created': {
+                'order': 'desc'
+            }
+        }]
+    }
+    res = es(universe).search(index=TOP_CONTENT_INDEX, 
+        doc_type=TOP_CONTENT_DOCUMENT_TYPE, body=body, size=quantity)
+    return [r['_source'] for r in res['hits']['hits']]
 
 
 def save_content(universe, content):
@@ -545,95 +643,11 @@ def get_items(universe, quantity=20, hours=24, daterange=None, time_decay=True):
         link['tweet'] = {
             'user_screen_name': tweet['_source']['user_screen_name'],
             'text': tweet['_source']['text'],
-            'user_profile_image_url': tweet['_source']['user_profile_image_url']
+            'user_profile_image_url': tweet['_source']['user_profile_image_url'],
+            'created': tweet['_source']['created']
         }
         top_links.append(link)
     return top_links
-
-
-def index_result_cache(universe, hours, results):
-    # scores = [r['score'][0] for r in results]
-    body = {
-        'cached_at': format_date(datetime.datetime.utcnow()),
-        'hours_since': hours,
-        # 'scores': {
-        #     'max': max(scores),
-        #     'min': min(scores),
-        #     'avg': sum(scores) / float(len(scores))
-        # },
-        'results': results
-    }
-    es(universe).index(
-        index=RESULTS_CACHE_INDEX,
-        doc_type=RESULTS_CACHE_DOCUMENT_TYPE,
-        body=body)
-
-
-def cache_results(universe):
-    """Crawls the universe, saves common queries to a cache, and saves top links."""
-    query_types = (4, 24, 24 * 7)
-    for query_type in query_types:
-        results = get_items(universe, hours=query_type)
-        index_result_cache(universe, query_type, results)
-
-
-def get_score_stats(universe, hours=4):
-    body = {
-        'aggregations': {
-            'fresh_queries': {
-                'filter': {
-                    'term': {
-                        'hours_since': hours
-                    }
-                },
-                'aggregations': {
-                    'scores': {
-                        'extended_stats': {
-                            'field': 'score'
-                        }
-                    }
-                }
-            }
-        }
-    }
-    res = es(universe).search(
-        index=RESULTS_CACHE_INDEX, 
-        doc_type=RESULTS_CACHE_DOCUMENT_TYPE, 
-        body=body)
-    return res['aggregations']['fresh_queries']['scores']
-
-
-def index_top_link(universe, link):
-    es(universe).index(
-        index=TOP_CONTENT_INDEX, 
-        doc_type=TOP_CONTENT_DOCUMENT_TYPE,
-        id=link['url'],
-        body=link)
-
-
-def get_top_link(universe, hours=4):
-    """Search for any links in the current set that are a high enough score
-    to get into top links. Return one (and only one) if so."""
-    try:
-        top_links = get_items(universe, hours=hours)
-    except IndexError:
-        return None
-    score_stats = get_score_stats(universe, hours=hours)
-    # Treat a link as a top link if it's > 2 standard devs above the average
-    cutoff = score_stats['avg'] + (2 * score_stats['std_deviation'])
-    link_is_already_top = lambda link: es(universe).exists(
-        index=TOP_CONTENT_INDEX, doc_type=TOP_CONTENT_DOCUMENT_TYPE, id=link['url'])
-    for link in top_links:
-        if link['score'] >= cutoff and not link_is_already_top(link):
-            # We only want one at a time even if more than 1 are in the results
-            return link
-    return None
-
-
-def check_for_top_links(universe):
-    top_link = get_top_link(universe)
-    if top_link is not None:
-        index_top_link(universe, top_link)
 
 
 def get_top_providers(universe, size=2000):

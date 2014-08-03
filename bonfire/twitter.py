@@ -21,6 +21,13 @@ def stream_client(universe):
     return _stream_clients[universe]
 
 
+def tweet_link(universe, link):
+    via = ' via @%s' % link['tweet']['user_screen_name']
+    text_limit = 140 - 23 - len(via)
+    status = text[:text_limit] + ' ' + link['url'] + via
+    client(universe).api.statuses.update.post(status=status)
+
+
 def lookup_users(universe, usernames):
     """Lookup Twitter users by screen name. Limited to first 100 user
     names by API limitation."""
