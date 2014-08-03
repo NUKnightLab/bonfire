@@ -1,9 +1,9 @@
 import math
 import time
-import datetime
 from elasticsearch import Elasticsearch
 from elasticsearch.exceptions import NotFoundError, TransportError
 from .config import get_elasticsearch_hosts
+from .dates import ELASTICSEARCH_TIME_FORMAT, now, get_since_now, get_query_dates
 
 
 RESULTS_CACHE_INDEX = 'bonfire_results_cache'
@@ -12,7 +12,7 @@ RESULTS_CACHE_MAPPING = {
     'properties': {
         'cached_at': {
             'type': 'date',
-            'format': 'EEE MMM d HH:mm:ss Z yyyy'
+            'format': ELASTICSEARCH_TIME_FORMAT
         },
         'hours_since': {
             'type': 'integer',
@@ -59,7 +59,7 @@ TOP_CONTENT_MAPPING = {
             'properties': {
                 'created': {
                     'type': 'date',
-                    'format': 'EEE MMM d HH:mm:ss Z yyyy'
+                    'format': ELASTICSEARCH_TIME_FORMAT
                 }
             }
         }
@@ -102,7 +102,7 @@ TWEET_MAPPING = {
         },
         'created': {
             'type': 'date',
-            'format': 'EEE MMM d HH:mm:ss Z yyyy'
+            'format': ELASTICSEARCH_TIME_FORMAT
         },
         'provider': {
             'type': 'string',
@@ -194,7 +194,7 @@ def set_cached_url(universe, url, resolved_url):
 
 def add_to_results_cache(universe, hours, results):
     body = {
-        'cached_at': format_date(datetime.datetime.utcnow()),
+        'cached_at': now(stringify=True),
         'hours_since': hours,
         'results': results
     }
@@ -363,7 +363,7 @@ def save_tweet(universe, tweet):
         body=tweet)
 
 
-def get_universe_tweets(universe, query=None, start=24, end=None, size=100):
+def get_universe_tweets(universe, query=None, quantity=20, hours=24, start=None, end=None):
     """
     Get tweets in a given universe.
 
@@ -378,10 +378,7 @@ def get_universe_tweets(universe, query=None, start=24, end=None, size=100):
     :arg size: number of tweets to return
     """
 
-    if not end:
-        end = datetime.datetime.utcnow()
-    if isinstance(start, int):
-        start = end - datetime.timedelta(hours=start)
+    start, end = get_query_dates(start, end, hours)
 
     # Build query based on what was in the input
     if query is None:
@@ -395,13 +392,13 @@ def get_universe_tweets(universe, query=None, start=24, end=None, size=100):
     body['filter'] = {
         'range': {
             'created': {
-                'gte': format_date(start),
-                'lte': format_date(end)
+                'gte': start,
+                'lte': end
             }
         }
     }
     res = es(universe).search(index=universe, doc_type=TWEET_DOCUMENT_TYPE,
-        body=body, size=size)
+        body=body, size=quantity)
     return [tweet['_source'] for tweet in res['hits']['hits']]
 
 
@@ -457,14 +454,14 @@ def search_items(universe, term, quantity=100):
     for index, hit in enumerate(res):
         result = hit['_source']
         if hit['_type'] == CONTENT_DOCUMENT_TYPE:
-            try:
-                matching_tweet = filter(
-                    lambda r: 'content_url' in r['_source'] and r['_source']['content_url'] == result['url'],
-                    res[index+1:])[0]
-            except IndexError:
-                pass
-            else:
-                result['tweet'] = res.pop(res.index(matching_tweet))['_source']
+            matching_tweets = filter(
+                lambda r: 'content_url' in r['_source'] and r['_source']['content_url'] == result['url'],
+                res[index+1:])
+            if matching_tweets:
+                for tweet in matching_tweets:
+                    popped_tweet = res.pop(res.index(tweet))
+                    if not result.get('tweet'):
+                        result['tweet'] = popped_tweet['_source']
         else:
             try:
                 matching_content = filter(
@@ -520,9 +517,10 @@ def score_link(link, user_weights, time_decay=True, hours=24):
             (tweeter['key'], tweeter_influence, score))
     if time_decay:
         score_factor = lambda hrs_since: 1 - math.log(hrs_since + 1) / hours
+
         first_tweeted = link['first_tweet']['hits']['hits'][0]['sort'][0]
-        time_diff = datetime.datetime.utcnow() - epoch_to_datetime(first_tweeted)
-        hours_since = int(time_diff.total_seconds()) / 60 / 60
+        hours_since = get_since_now(first_tweeted, 
+            time_type='hour', stringify=False)[0]
         orig_score = score
         score *= score_factor(hours_since)
         score_explanation.append(
@@ -531,7 +529,7 @@ def score_link(link, user_weights, time_decay=True, hours=24):
     return score, score_explanation
 
 
-def get_items(universe, quantity=20, hours=24, daterange=None, time_decay=True):
+def get_items(universe, quantity=20, hours=24, daterange=None, start=None, end=None, time_decay=True):
     """
     The default function: gets the most popular links shared 
     from a given universe and time frame.
@@ -543,11 +541,7 @@ def get_items(universe, quantity=20, hours=24, daterange=None, time_decay=True):
     :arg time_decay: whether or not to decay the score based on the time of its first tweet
     """
 
-    if daterange is not None:
-        assert time_decay is False, 'No time decay on a fixed daterange search'
-        start, end = format_date(daterange[0]), format_date(daterange[1])
-    else:
-        start, end = 'now-%dh' % hours, 'now'
+    start, end = get_query_dates(start, end, hours)
     search_limit = quantity * 5 if time_decay else quantity * 2
 
     # Get the top links in the given time frame, and some extra agg metadata
@@ -639,13 +633,8 @@ def get_items(universe, quantity=20, hours=24, daterange=None, time_decay=True):
         link['score_explanation'] = link_match['score_explanation']
         
         tweet = link_match['first_tweet']['hits']['hits'][0]
-        link['first_tweeted'] = get_time_since_now(epoch_to_datetime(tweet['sort'][0]))
-        link['tweet'] = {
-            'user_screen_name': tweet['_source']['user_screen_name'],
-            'text': tweet['_source']['text'],
-            'user_profile_image_url': tweet['_source']['user_profile_image_url'],
-            'created': tweet['_source']['created']
-        }
+        link['first_tweeted'] = get_since_now(tweet['sort'][0])
+        link['tweet'] = tweet['_source']
         top_links.append(link)
     return top_links
 
@@ -672,35 +661,3 @@ def get_top_providers(universe, size=2000):
         size=0)
     return [i['key'] for i in res['aggregations']['providers']['buckets']]
 
-
-def format_date(dt):
-    """Convert a datetime to an elasticsearch-formatted datestring (UTC)."""
-    return dt.strftime('%a %b %d %H:%M:%S +0000 %Y')
-
-
-def epoch_to_datetime(epoch):
-    """Converts unix timestamp to python datetime (UTC)."""
-    return datetime.datetime(*time.gmtime(epoch / 1000)[:7])
-
-
-def get_time_since_now(start_time):
-    """
-    Accepts a UTC datetime, and gets the number of 
-    days/hours/minutes/seconds ago, as a string.
-    """
-    now = datetime.datetime.utcnow()
-    diff = now - start_time
-    time_map = (
-        ('day', diff.days),
-        ('hour', diff.seconds / 60 / 60),
-        ('minute', diff.seconds / 60),
-        ('second', diff.seconds)
-    )
-    # Loop through each amount, and if there are any, return its value
-    for word, amt in time_map:
-        if amt > 1:
-            return "%d %ss" % (amt, word)
-        elif amt == 1:
-            return "%d %s" % (amt, word)
-    # Since it goes down to seconds, you probably shouldn't get here
-    return 'just now'

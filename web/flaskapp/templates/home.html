@@ -25,7 +25,7 @@
 
         <div id="searchbox">
           <form action="" name="search">
-            Search Tweets and content: <input type="search" name="search">
+            Search Tweets and content: <input type="search" name="term">
             <input type="submit">
           </form>
         </div>
@@ -34,8 +34,9 @@
 
         <div id="datetimepicker">
           <form action="" name="datetimepicker">
-            Start: <input id="startdatepicker" type="text" name="startdate">
-            End: <input id="enddatepicker" type="text" name="enddate">
+            Start: <input id="startdatepicker" type="text" name="start">
+            End: <input id="enddatepicker" type="text" name="end">
+            <input type="hidden" id="timeOffsetInput" name="timeOffset">
             <input type="submit">
           </form>
         </div>
@@ -107,24 +108,17 @@
   <script src="https://ajax.googleapis.com/ajax/libs/jquery/1.11.1/jquery.min.js"></script>
   <script src="//maxcdn.bootstrapcdn.com/bootstrap/3.2.0/js/bootstrap.min.js"></script>
   <script>!function(d,s,id){var js,fjs=d.getElementsByTagName(s)[0],p=/^http:/.test(d.location)?'http':'https';if(!d.getElementById(id)){js=d.createElement(s);js.id=id;js.src=p+"://platform.twitter.com/widgets.js";fjs.parentNode.insertBefore(js,fjs);}}(document,"script","twitter-wjs");</script>
-
   <script src="http://xdsoft.net/scripts/jquery.datetimepicker.js"></script>
   <script type="text/javascript">
     $(function() {
-      var startDate = "{{ dates.start }}".split(' ')[0]
-      var startTime = "{{ dates.start }}".split(' ')[1]
-      var endDate = "{{ dates.end }}".split(' ')[0]
-      var endTime = "{{ dates.end }}".split(' ')[1]
+      var offset = new Date().getTimezoneOffset();
+      $('#timeOffsetInput').val(offset);
       $('#startdatepicker').datetimepicker({
-        defaultDate: startDate,
-        defaultTime: startTime
+        format: 'D M d H:i:s Y'
       });
       $('#enddatepicker').datetimepicker({
-        defaultDate: endDate,
-        defaultTime: endTime
+        format: 'D M d H:i:s Y'
       });
-      $('#startdatepicker').val("{{ dates.start }}")
-      $('#enddatepicker').val("{{ dates.end }}")
     });
   </script>
   </body>
