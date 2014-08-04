@@ -111,6 +111,11 @@
   <script src="http://xdsoft.net/scripts/jquery.datetimepicker.js"></script>
   <script type="text/javascript">
     $(function() {
+      var formatDate = function(date) {
+        elems = date.toString().split(' ');
+        rearranged = [elems[0], elems[1], elems[2], elems[4], elems[3]];
+        return rearranged.join(' ');
+      };
       var offset = new Date().getTimezoneOffset();
       $('#timeOffsetInput').val(offset);
       $('#startdatepicker').datetimepicker({
@@ -119,6 +124,10 @@
       $('#enddatepicker').datetimepicker({
         format: 'D M d H:i:s Y'
       });
+      d = new Date();
+      d.setDate(d.getDate()-1);
+      $('#startdatepicker').val(formatDate(d));
+      $('#enddatepicker').val(formatDate(new Date()));
     });
   </script>
   </body>
