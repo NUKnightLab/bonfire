@@ -55,7 +55,7 @@ def get_since_now(start_time, time_type=None, stringify=True):
     """
     Gets the amount of time that has expired since now.
     Smartly chooses between hours, days, minutes, and seconds.
-    Accepts datetime or unix epoch.
+    Accepts datetime, unix epoch, or Twitter-formatted datestring.
 
     :arg time_type: force return of a certain time measurement
         (e.g. "120 seconds ago" instead of "2 minutes ago")
@@ -66,6 +66,8 @@ def get_since_now(start_time, time_type=None, stringify=True):
 
     if isinstance(start_time, (int, float)):
         start_time = epoch_to_datetime(start_time)
+    elif isinstance(start_time, basestring):
+        start_time = dateify_string(start_time)
     diff = int((now() - start_time).total_seconds())
 
     time_types = (

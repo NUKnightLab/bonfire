@@ -1,22 +1,13 @@
-import datetime
 import logging
 import time
 from elasticsearch.exceptions import ConnectionError
 from .db import build_universe_mappings, next_unprocessed_tweet, \
                 save_tweet, save_content, get_cached_url, set_cached_url
 from .content import extract
+from .dates import get_since_now
 
 def logger():
     return  logging.getLogger(__name__)
-
-
-def seconds_since_now(raw_tweet):
-    """Take an unprocessed tweet and return the number of seconds ago 
-    it was created."""
-    tweet_created_at = raw_tweet['_source']['created_at'].replace('+0000 ', '')
-    tweet_created = datetime.datetime.strptime(tweet_created_at, '%a %b %d %H:%M:%S %Y')
-    time_since_now = datetime.datetime.utcnow() - tweet_created
-    return time_since_now.seconds
 
 
 def process_universe_rawtweets(universe, build_mappings=True):
@@ -32,7 +23,7 @@ def process_universe_rawtweets(universe, build_mappings=True):
             if raw_tweet:
                 process_rawtweet(universe, raw_tweet)
                 # Check how far behind the collector we are
-                if seconds_since_now(raw_tweet) > 300:
+                if get_since_now(raw_tweet['_source']['created_at'], 'second') > 300
                     logger().info(
                         'Processor is more than 5 minutes behind collector')
             else:

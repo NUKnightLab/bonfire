@@ -139,54 +139,61 @@ def es(universe):
 
 
 def build_universe_mappings(universe):
-    """Create and map the universe index."""
-    if not es(universe).indices.exists(universe):
-        es(universe).indices.create(index=universe)
-    if not es(universe).indices.exists(URL_CACHE_INDEX):
-        es(universe).indices.create(index=URL_CACHE_INDEX)
-    if not es(universe).indices.exists(RESULTS_CACHE_INDEX):
-        es(universe).indices.create(index=RESULTS_CACHE_INDEX)
-    if not es(universe).indices.exists(TOP_CONTENT_INDEX):
-        es(universe).indices.create(index=TOP_CONTENT_INDEX)
+    """Create and map the universe."""
+    
+    # Keys are the index names. 
+    # Values are key/value pairs of the doc types and doc mappings.
+    all_indices = {
+        universe: {
+            USER_DOCUMENT_TYPE: USER_MAPPING,
+            CONTENT_DOCUMENT_TYPE: CONTENT_MAPPING,
+            TWEET_DOCUMENT_TYPE: TWEET_MAPPING,
+            UNPROCESSED_TWEET_DOCUMENT_TYPE: UNPROCESSED_TWEET_MAPPING
+        },
+        URL_CACHE_INDEX: {
+            CACHED_URL_DOCUMENT_TYPE: CACHED_URL_MAPPING
+        },
+        RESULTS_CACHE_INDEX: {
+            RESULTS_CACHE_DOCUMENT_TYPE: RESULTS_CACHE_MAPPING
+        },
+        TOP_CONTENT_INDEX: {
+            TOP_CONTENT_DOCUMENT_TYPE: TOP_CONTENT_MAPPING
+        }
+    }
 
-    es(universe).indices.put_mapping(CACHED_URL_DOCUMENT_TYPE,
-        CACHED_URL_MAPPING,
-        index=URL_CACHE_INDEX)
-    es(universe).indices.put_mapping(RESULTS_CACHE_DOCUMENT_TYPE,
-        RESULTS_CACHE_MAPPING,
-        index=RESULTS_CACHE_INDEX)
-    es(universe).indices.put_mapping(TOP_CONTENT_DOCUMENT_TYPE,
-        TOP_CONTENT_MAPPING,
-        index=TOP_CONTENT_INDEX)
-
-    es(universe).indices.put_mapping(USER_DOCUMENT_TYPE,
-        USER_MAPPING,
-        index=universe)
-    es(universe).indices.put_mapping(CONTENT_DOCUMENT_TYPE,
-        CONTENT_MAPPING,
-        index=universe)
-    es(universe).indices.put_mapping(TWEET_DOCUMENT_TYPE,
-        TWEET_MAPPING,
-        index=universe)
-    es(universe).indices.put_mapping(UNPROCESSED_TWEET_DOCUMENT_TYPE,
-        UNPROCESSED_TWEET_MAPPING,
-        index=universe)
+    for index_name, index_mapping in all_indices.items():
+        if not es(universe).indices.exists(index_name):
+            es(universe).indices.create(index=index_name)
+        for doc_type, doc_mapping in index_mapping.items():
+            es(universe).indices.put_mapping(
+                doc_type, doc_mapping, index=index_name)
 
 
 def get_all_docs(universe, index, doc_type, body={}, size=None, field='_id'):
-    chunk_size = size or 5000
-    start = 0
+    """
+    Helper function to return all values in a certain field.
+    Defaults to retrieving all ids from a given index and doc type.
+
+    :arg universe: current universe.
+    :arg index: current index.
+    :arg doc_type: the type of doc to return all values for.
+    :arg body: add custom body, or leave blank to retrieve everything.
+    :arg size: limit by size, or leave as None to retrieve all.
+    :arg field: retrieve all of a specific field. Defaults to id.
+    """
+    chunk_size, start = 5000, 0
     all_results = []
     while True:
         if field == '_id':
             res = es(universe).search(index=universe, doc_type=doc_type,
-                body=body, size=chunk_size, from_=start, _source=False)
+                body=body, size=chunk_size, from_=start,
+                _source=False)
             all_results.extend(
                 [u['_id'] for u in res['hits']['hits']])
         else:
             res = es(universe).search(index=universe, doc_type=doc_type,
-                body=body, size=chunk_size, 
-                from_=start, _source_include=[field])
+                body=body, size=chunk_size, from_=start,
+                _source_include=[field])
             all_results.extend(
                 [u['_source'][field] for u in res['hits']['hits']])
         if size is None:
@@ -264,7 +271,7 @@ def cleanup(universe, days=30):
         field='content_url'))
     obsolete_urls = all_urls - tweeted_urls
 
-    # Delete that too
+    # Delete those too
     actions = []
     for url in obsolete_urls:
         actions.append({
@@ -299,6 +306,7 @@ def set_cached_url(universe, url, resolved_url):
 
 
 def add_to_results_cache(universe, hours, results):
+    """Cache a set of results under certain number of hours."""
     body = {
         'cached_at': now(stringify=True),
         'hours_since': hours,
@@ -311,6 +319,8 @@ def add_to_results_cache(universe, hours, results):
 
 
 def get_score_stats(universe, hours=4):
+    """Get extended stats on the scores returned from the results cache.
+    :arg hours: type of query to search for."""
     body = {
         'aggregations': {
             'fresh_queries': {
@@ -358,6 +368,7 @@ def get_top_link(universe, hours=4, quantity=5):
 
 
 def add_to_top_links(universe, link):
+    """Index a new top link to the given universe."""
     es(universe).index(
         index=TOP_CONTENT_INDEX, 
         doc_type=TOP_CONTENT_DOCUMENT_TYPE,
@@ -366,6 +377,7 @@ def add_to_top_links(universe, link):
 
 
 def get_recent_top_links(universe, quantity=20):
+    """Get the most recently added top links in the given universe."""
     body = {
         'sort': [{
             'tweet.created': {
