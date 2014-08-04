@@ -4,7 +4,8 @@ from elasticsearch import Elasticsearch
 from elasticsearch.exceptions import NotFoundError, TransportError
 from elasticsearch.helpers import bulk
 from .config import get_elasticsearch_hosts
-from .dates import ELASTICSEARCH_TIME_FORMAT, now, get_since_now, get_query_dates
+from .dates import ELASTICSEARCH_TIME_FORMAT, now, get_since_now, \
+                   get_query_dates
 
 
 RESULTS_CACHE_INDEX = 'bonfire_results_cache'
@@ -180,11 +181,14 @@ def get_all_docs(universe, index, doc_type, body={}, size=None, field='_id'):
         if field == '_id':
             res = es(universe).search(index=universe, doc_type=doc_type,
                 body=body, size=chunk_size, from_=start, _source=False)
-            all_results.extend([u['_id'] for u in res['hits']['hits']])
+            all_results.extend(
+                [u['_id'] for u in res['hits']['hits']])
         else:
             res = es(universe).search(index=universe, doc_type=doc_type,
-                body=body, size=chunk_size, from_=start, _source_include=[field])
-            all_results.extend([u['_source'][field] for u in res['hits']['hits']])
+                body=body, size=chunk_size, 
+                from_=start, _source_include=[field])
+            all_results.extend(
+                [u['_source'][field] for u in res['hits']['hits']])
         if size is None:
             size = res['hits']['total']
         start += chunk_size
@@ -343,7 +347,9 @@ def get_top_link(universe, hours=4, quantity=5):
     # Treat a link as a top link if it's > 2 standard devs above the average
     cutoff = score_stats['avg'] + (2 * score_stats['std_deviation'])
     link_is_already_top = lambda link: es(universe).exists(
-        index=TOP_CONTENT_INDEX, doc_type=TOP_CONTENT_DOCUMENT_TYPE, id=link['url'])
+        index=TOP_CONTENT_INDEX, 
+        doc_type=TOP_CONTENT_DOCUMENT_TYPE, 
+        id=link['url'])
     for link in top_links:
         if link['score'] >= cutoff and not link_is_already_top(link):
             # We only want one at a time even if more than 1 are in the results
@@ -458,7 +464,8 @@ def save_tweet(universe, tweet):
         body=tweet)
 
 
-def get_universe_tweets(universe, query=None, quantity=20, hours=24, start=None, end=None):
+def get_universe_tweets(universe, query=None, quantity=20, 
+                        hours=24, start=None, end=None):
     """
     Get tweets in a given universe.
 
@@ -550,7 +557,8 @@ def search_items(universe, term, quantity=100):
         result = hit['_source']
         if hit['_type'] == CONTENT_DOCUMENT_TYPE:
             matching_tweets = filter(
-                lambda r: 'content_url' in r['_source'] and r['_source']['content_url'] == result['url'],
+                lambda r: 'content_url' in r['_source'] and \
+                          r['_source']['content_url'] == result['url'],
                 res[index+1:])
             if matching_tweets:
                 for tweet in matching_tweets:
@@ -560,7 +568,8 @@ def search_items(universe, term, quantity=100):
         else:
             try:
                 matching_content = filter(
-                    lambda r: 'url' in r['_source'] and r['_source']['url'] == result['content_url'],
+                    lambda r: 'url' in r['_source'] and 
+                              r['_source']['url'] == result['content_url'],
                     res[index+1:])[0]
             except IndexError:
                 result = {
@@ -580,7 +589,8 @@ def search_items(universe, term, quantity=100):
 
 
 def get_user_weights(universe, user_ids):
-    """Takes a list of user ids and returns a dict with their weighted influence."""
+    """Takes a list of user ids and returns a dict 
+    with their weighted influence."""
     res = es(universe).mget({'ids': list(set(user_ids))}, 
         index=universe, doc_type=USER_DOCUMENT_TYPE)['docs']
     users = filter(lambda u: u['found'], res)
@@ -624,16 +634,18 @@ def score_link(link, user_weights, time_decay=True, hours=24):
     return score, score_explanation
 
 
-def get_items(universe, quantity=20, hours=24, daterange=None, start=None, end=None, time_decay=True):
+def get_items(universe, quantity=20, hours=24, 
+              start=None, end=None, time_decay=True):
     """
     The default function: gets the most popular links shared 
     from a given universe and time frame.
 
     :arg quantity: number of links to return
-    :arg hours: hours since now to search through
-    :arg daterange: list or tuple with start and end dates (python datetimes, UTC)
-        this will override hours, and cannot be used with time_decay
-    :arg time_decay: whether or not to decay the score based on the time of its first tweet
+    :arg hours: hours since end to search through.
+    :arg start: start datetime in UTC. Defaults to hours.
+    :arg end: end datetime in UTC. Defaults to now.
+    :arg time_decay: whether or not to decay the score based on the time
+        of its first tweet.
     """
 
     start, end = get_query_dates(start, end, hours)
@@ -704,10 +716,8 @@ def get_items(universe, quantity=20, hours=24, daterange=None, start=None, end=N
     for link in links:
         link['score'], link['score_explanation'] = score_link(
                 link, user_weights, time_decay=time_decay, hours=hours)
-    sorted_links = sorted(links, key=lambda link: link['score'], reverse=True)[:quantity]
-
-    # Save the scores so we can return them
-    score_map = dict([(link['key'], (link['score'], link['score_explanation'])) for link in sorted_links])
+    sorted_links = sorted(links, 
+        key=lambda link: link['score'], reverse=True)[:quantity]
 
     # Get the full metadata for these urls.
     top_urls = [url['key'] for url in sorted_links]
