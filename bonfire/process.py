@@ -23,7 +23,7 @@ def process_universe_rawtweets(universe, build_mappings=True):
             if raw_tweet:
                 process_rawtweet(universe, raw_tweet)
                 # Check how far behind the collector we are
-                if get_since_now(raw_tweet['_source']['created_at'], 'second') > 300
+                if get_since_now(raw_tweet['_source']['created_at'], 'second') > 300:
                     logger().info(
                         'Processor is more than 5 minutes behind collector')
             else:
