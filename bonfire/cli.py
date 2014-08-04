@@ -9,7 +9,7 @@ from .config import (
     get_universes,
     logging_config,
     get_universes )
-from .universe import build_universe, cache_queries
+from .universe import build_universe, cache_queries, cleanup_universe
 from .twitter import collect_universe_tweets
 from .process import process_universe_rawtweets
 
@@ -105,6 +105,15 @@ def cache(universe, top):
 
 
 @click.command()
+@click.argument('universe', default=DEFAULT_UNIVERSE,
+    type=click.Choice(UNIVERSES))
+@click.option('--days', default=30,
+    help='Number of days ago to consider something old.')
+def cleanup(universe, days):
+    cleanup_universe(universe, days=days)
+
+
+@click.command()
 @click.pass_context
 def help(ctx):
     """Show help."""
@@ -117,4 +126,5 @@ cli.add_command(build)
 cli.add_command(collect)
 cli.add_command(process)
 cli.add_command(cache)
+cli.add_command(cleanup)
 cli.add_command(help)

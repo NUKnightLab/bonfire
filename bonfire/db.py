@@ -2,6 +2,7 @@ import math
 import time
 from elasticsearch import Elasticsearch
 from elasticsearch.exceptions import NotFoundError, TransportError
+from elasticsearch.helpers import bulk
 from .config import get_elasticsearch_hosts
 from .dates import ELASTICSEARCH_TIME_FORMAT, now, get_since_now, get_query_dates
 
@@ -171,6 +172,106 @@ def build_universe_mappings(universe):
         index=universe)
 
 
+def get_all_docs(universe, index, doc_type, body={}, size=None, field='_id'):
+    chunk_size = size or 5000
+    start = 0
+    all_results = []
+    while True:
+        if field == '_id':
+            res = es(universe).search(index=universe, doc_type=doc_type,
+                body=body, size=chunk_size, from_=start, _source=False)
+            all_results.extend([u['_id'] for u in res['hits']['hits']])
+        else:
+            res = es(universe).search(index=universe, doc_type=doc_type,
+                body=body, size=chunk_size, from_=start, _source_include=[field])
+            all_results.extend([u['_source'][field] for u in res['hits']['hits']])
+        if size is None:
+            size = res['hits']['total']
+        start += chunk_size
+        if start >= size:
+            break
+    return all_results
+
+
+def cleanup(universe, days=30):
+    """Delete everything in the universe that is more than days old.
+    Does not apply to top content."""
+    client = es(universe)
+    actions = []
+
+    body = {
+        'filter': {
+            'range': {
+                'created': {
+                    'lt': 'now-%dd' % days
+                }
+            }
+        }
+    }
+
+    # Delete all tweets that are over days old
+    old_tweet_ids = get_all_docs(universe,
+        index=universe,
+        doc_type=TWEET_DOCUMENT_TYPE,
+        body=body)
+    for tweet_id in old_tweet_ids:
+        actions.append({
+            '_op_type': 'delete',
+            '_index': universe,
+            '_type': TWEET_DOCUMENT_TYPE,
+            '_id': tweet_id,
+        })
+
+    # Delete old cached results and urls
+    body['filter']['range']['cached_at'] = body['filter']['range'].pop('created')
+    old_results_ids = get_all_docs(universe,
+        index=RESULTS_CACHE_INDEX,
+        doc_type=RESULTS_CACHE_DOCUMENT_TYPE,
+        body=body)
+    for result_id in old_results_ids:
+        actions.append({
+            '_op_type': 'delete',
+            '_index': RESULTS_CACHE_INDEX,
+            '_type': RESULTS_CACHE_DOCUMENT_TYPE,
+            '_id': result_id
+        })
+    old_urls_ids = get_all_docs(universe,
+        index=URL_CACHE_INDEX,
+        doc_type=URL_CACHE_DOCUMENT_TYPE,
+        body=body)
+    for url in old_urls_ids:
+        actions.append({
+            '_op_type': 'delete',
+            '_index': URL_CACHE_INDEX,
+            '_type': URL_CACHE_DOCUMENT_TYPE,
+            '_id': url
+        })
+
+    # This actually deletes everything
+    bulk(client, actions)
+
+    # Now we can quickly get all content that doesn't have a tweet
+    all_urls = set(get_all_docs(universe, 
+        index=universe, 
+        doc_type=CONTENT_DOCUMENT_TYPE))
+    tweeted_urls = set(get_all_docs(universe,
+        index=universe,
+        doc_type=TWEET_DOCUMENT_TYPE,
+        field='content_url'))
+    obsolete_urls = all_urls - tweeted_urls
+
+    # Delete that too
+    actions = []
+    for url in obsolete_urls:
+        actions.append({
+            '_op_type': 'delete',
+            '_index': universe,
+            '_type': CONTENT_DOCUMENT_TYPE,
+            '_id': url
+            })
+    bulk(client, actions)
+    
+
 def get_cached_url(universe, url):
     """Get a resolved URL from the index.
     Returns None if URL doesn't exist."""
@@ -185,7 +286,8 @@ def set_cached_url(universe, url, resolved_url):
     """Index a URL and its resolution in Elasticsearch"""
     body = {
         'url': url.rstrip('/'),
-        'resolved': resolved_url.rstrip('/')
+        'resolved': resolved_url.rstrip('/'),
+        'cached_at': now(stringify=True)
     }
     es(universe).index(index=URL_CACHE_INDEX,
         doc_type=CACHED_URL_DOCUMENT_TYPE, body=body, id=url)
@@ -310,18 +412,11 @@ def get_user_ids(universe, size=None):
             }
         }]
     }
-    chunk_size = size or 5000
-    start = 0
-    user_ids = []
-    while True:
-        res = es(universe).search(index=universe, doc_type=USER_DOCUMENT_TYPE,
-            body=body, size=chunk_size, from_=start, _source=False)
-        user_ids.extend([u['_id'] for u in res['hits']['hits']])
-        if size is None:
-            size = res['hits']['total']
-        start += chunk_size
-        if start >= size:
-            break
+    user_ids = get_all_docs(universe, 
+        index=universe, 
+        doc_type=USER_DOCUMENT_TYPE,
+        body=body,
+        size=size)
     return user_ids
 
 

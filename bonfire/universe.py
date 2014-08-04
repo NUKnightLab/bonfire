@@ -10,7 +10,8 @@ from .db import (
     get_items,
     get_top_link,
     add_to_top_links,
-    add_to_results_cache )
+    add_to_results_cache,
+    cleanup )
 from .config import get_universe_seed
 
 CACHE_HOURS = (4, 24, 168)
@@ -60,6 +61,10 @@ def build_universe(universe, build_mappings=True):
     obsolete_users = set(get_user_ids(universe)) - set(all_citizens)
     for user in obsolete_users:
         delete_user(universe, user)
+
+
+def cleanup_universe(universe, days=30):
+    cleanup(universe, days=days)
 
 
 def cache_queries(universe, top_links=False):
