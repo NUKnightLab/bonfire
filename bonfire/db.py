@@ -140,7 +140,7 @@ def es(universe):
 
 def build_universe_mappings(universe):
     """Create and map the universe."""
-    
+
     # Keys are the index names. 
     # Values are key/value pairs of the doc types and doc mappings.
     all_indices = {
