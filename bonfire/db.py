@@ -1,12 +1,18 @@
+import logging
 import math
 import time
 from elasticsearch import Elasticsearch
-from elasticsearch.exceptions import NotFoundError, TransportError
+from elasticsearch.exceptions import (
+    NotFoundError,
+    TransportError,
+    ConflictError)
 from elasticsearch.helpers import bulk
 from .config import get_elasticsearch_hosts
 from .dates import ELASTICSEARCH_TIME_FORMAT, now, get_since_now, \
                    get_query_dates
 
+def logger():
+    return  logging.getLogger(__name__)
 
 RESULTS_CACHE_INDEX = 'bonfire_results_cache'
 RESULTS_CACHE_DOCUMENT_TYPE = 'results'
@@ -447,24 +453,47 @@ def enqueue_tweet(universe, tweet):
         body=tweet)
 
 
-def next_unprocessed_tweet(universe):
+def next_unprocessed_tweet(universe, not_ids=None):
     """Get the next unprocessed tweet and delete it from the index."""
     # TODO: redo this so it is an efficient queue. Currently for
     # testing only.
     try:
-        result = es(universe).search(index=universe,
-            doc_type=UNPROCESSED_TWEET_DOCUMENT_TYPE,
-            size=1)['hits']['hits'][0]
+        if not_ids is None:
+            result = es(universe).search(index=universe,
+                doc_type=UNPROCESSED_TWEET_DOCUMENT_TYPE,
+                size=1, version=True)['hits']['hits'][0]
+        else:
+            body = {
+                'query': {
+                    'bool': {
+                        'must_not': {
+                            'ids': {
+                                'values': not_ids
+                            }
+                        }
+                    }
+                }
+            }
+            result = es(universe).search(index=universe,
+                doc_type=UNPROCESSED_TWEET_DOCUMENT_TYPE,
+                size=1, version=True, body=body)['hits']['hits'][0]
     except IndexError:
         # There are no unprocessed tweets in the universe
         return None
     try:
         es(universe).delete(index=universe,
             doc_type=UNPROCESSED_TWEET_DOCUMENT_TYPE,
-            id=result['_id'])
+            id=result['_id'], version=result['_version'])
     except NotFoundError:
         # Something's wrong. Ignore it for now.
         return next_unprocessed_tweet(universe)
+    except ConflictError:
+        # Could happen if another processor grabbed and deleted this tweet,
+        # or state is otherwise inconsistent.
+        logger().debug('Version conflict. Skipping raw tweet ID: %s' % (
+            result['_id']))
+        return next_unprocessed_tweet(universe, not_ids=[result['_id']])
+    logger().debug('Dequeued raw tweet: %s' % result['_id'])
     return result
 
 
