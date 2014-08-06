@@ -1,9 +1,20 @@
 import os
 import sys
 from collections import Counter
-from .twitter import lookup_users, get_friends
-from .db import build_universe_mappings, get_user_ids, save_user, delete_user
+from .twitter import lookup_users, get_friends, tweet_link
+from .db import (
+    build_universe_mappings,
+    get_user_ids,
+    save_user,
+    delete_user,
+    get_items,
+    get_top_link,
+    add_to_top_links,
+    add_to_results_cache,
+    cleanup )
 from .config import get_universe_seed
+
+CACHE_HOURS = (4, 24, 168)
 
 
 def build_universe(universe, build_mappings=True):
@@ -50,3 +61,23 @@ def build_universe(universe, build_mappings=True):
     obsolete_users = set(get_user_ids(universe)) - set(all_citizens)
     for user in obsolete_users:
         delete_user(universe, user)
+
+
+def cleanup_universe(universe, days=30):
+    cleanup(universe, days=days)
+
+
+def cache_queries(universe, top_links=False):
+    for hours in CACHE_HOURS:
+        results = get_items(universe, hours=hours)
+        add_to_results_cache(universe, hours, results)
+    if top_links:
+        update_top_links(universe)
+
+
+def update_top_links(universe, tweet=True):
+    top_link = get_top_link(universe)
+    if top_link is not None:
+        add_to_top_links(universe, top_link)
+        if tweet:
+            tweet_link(universe, top_link)

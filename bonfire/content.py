@@ -1,5 +1,6 @@
 import requests
 from newspaper import Article
+from newspaper.images import fetch_image_dimension
 from urlparse import urlparse, urljoin
 
 # These are url domains/excepts that newspaper's URL sanitizer handles poorly.
@@ -78,7 +79,6 @@ def extract(url, html=None):
 
     :arg html: if provided, skip downloading and go straight to parsing html.
     """
-
     article = Article(url)
 
     # Check for any flags that newspaper handles poorly.
@@ -92,6 +92,7 @@ def extract(url, html=None):
     article.parse()
     f = NewspaperFetcher(article)
 
+    image = f.get_image()
     result = {
         'url': f.get_canonical_url() or url.rstrip('/'),
         'provider': f.get_provider() or '',
@@ -100,7 +101,9 @@ def extract(url, html=None):
         'text': article.text or '',
         #'published': f.get_published() or None,
         'authors': f.get_authors() or '',
-        'img': f.get_image(),
+        'img': image[0],
+        'img_h': image[1],
+        'img_w': image[2],
         'player': f.get_twitter_player(),
         'favicon': f.get_favicon(),
         'tags': f.get_tags(),
@@ -195,20 +198,29 @@ class NewspaperFetcher(object):
     def get_twitter_image(self):
         """Retrieve twitter image for the resource."""
         img = self.article.meta_data.get('twitter', {}).get('image', '')
+        height, width = 0, 0
         # Sometimes the image is at twitter:image:src rather than twitter:image
         if isinstance(img, dict):
+            height = img.get('height', 0)
+            width = img.get('width', 0)
             img = img.get('src', '') or \
                   img.get('url', '')
-        return img
+        return [img, height, width]
 
     def get_facebook_image(self):
         """Retrieve opengraph image for the resource."""
         img = self.article.meta_data.get('og', {}).get('image', '')
+        height, width = 0, 0
         # Sometimes the image is at og:image:url rather than og:image
         if isinstance(img, dict):
+            height = img.get('height', 0)
+            width = img.get('width', 0)
             img = img.get('url', '') or \
                   img.get('src', '')
-        return img
+        return [img, height, width]
+
+    def get_image_dimensions(self, img_url):
+        return fetch_image_dimension(img_url, self.article.config.browser_user_agent)
 
     def get_image(self):
         """
@@ -218,9 +230,14 @@ class NewspaperFetcher(object):
             - newspaper's top image.
         """
         result = self.get_facebook_image() or \
-                 self.get_twitter_image() or \
-                 self.article.top_image
-        return self._add_domain(result)
+                 self.get_twitter_image()
+        if not result:
+            result = [self.article.top_image, 0, 0]
+        result[0] = self._add_domain(result[0])
+        if not all(result[1:]):
+            width, height = self.get_image_dimensions(result[0])
+            result[1], result[2] = height, width
+        return result
 
     def get_authors(self):
         """Retrieve an author or authors. This works very sporadically."""

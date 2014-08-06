@@ -1,10 +1,38 @@
 import math
 import time
-import datetime
 from elasticsearch import Elasticsearch
 from elasticsearch.exceptions import NotFoundError, TransportError
+from elasticsearch.helpers import bulk
 from .config import get_elasticsearch_hosts
+from .dates import ELASTICSEARCH_TIME_FORMAT, now, get_since_now, \
+                   get_query_dates
 
+
+RESULTS_CACHE_INDEX = 'bonfire_results_cache'
+RESULTS_CACHE_DOCUMENT_TYPE = 'results'
+RESULTS_CACHE_MAPPING = {
+    'properties': {
+        'cached_at': {
+            'type': 'date',
+            'format': ELASTICSEARCH_TIME_FORMAT
+        },
+        'hours_since': {
+            'type': 'integer',
+        },
+        'results': {
+            'properties': {
+                '_default_': {
+                    'type': 'string',
+                    'index': 'no'
+                },
+                'score': {
+                    'type': 'float',
+                    'index': 'not_analyzed'
+                }
+            }
+        }
+    }
+}
 
 URL_CACHE_INDEX = 'bonfire_url_cache'
 CACHED_URL_DOCUMENT_TYPE = 'url'
@@ -17,6 +45,25 @@ CACHED_URL_MAPPING = {
         'resolved': {
             'type': 'string',
             'index': 'not_analyzed'
+        }
+    }
+}
+
+TOP_CONTENT_INDEX = 'bonfire_top_content'
+TOP_CONTENT_DOCUMENT_TYPE = 'top_content'
+TOP_CONTENT_MAPPING = {
+    'properties': {
+        '_default_': {
+            'type': 'string',
+            'index': 'no'
+        },
+        'tweet': {
+            'properties': {
+                'created': {
+                    'type': 'date',
+                    'format': ELASTICSEARCH_TIME_FORMAT
+                }
+            }
         }
     }
 }
@@ -57,7 +104,7 @@ TWEET_MAPPING = {
         },
         'created': {
             'type': 'date',
-            'format': 'EEE MMM d HH:mm:ss Z yyyy'
+            'format': ELASTICSEARCH_TIME_FORMAT
         },
         'provider': {
             'type': 'string',
@@ -92,29 +139,149 @@ def es(universe):
 
 
 def build_universe_mappings(universe):
-    """Create and map the universe index."""
-    if not es(universe).indices.exists(universe):
-        es(universe).indices.create(index=universe)
-    if not es(universe).indices.exists(URL_CACHE_INDEX):
-        es(universe).indices.create(index=URL_CACHE_INDEX)
+    """Create and map the universe."""
 
-    es(universe).indices.put_mapping(CACHED_URL_DOCUMENT_TYPE,
-        CACHED_URL_MAPPING,
-        index=URL_CACHE_INDEX)
+    # Keys are the index names. 
+    # Values are key/value pairs of the doc types and doc mappings.
+    all_indices = {
+        universe: {
+            USER_DOCUMENT_TYPE: USER_MAPPING,
+            CONTENT_DOCUMENT_TYPE: CONTENT_MAPPING,
+            TWEET_DOCUMENT_TYPE: TWEET_MAPPING,
+            UNPROCESSED_TWEET_DOCUMENT_TYPE: UNPROCESSED_TWEET_MAPPING
+        },
+        URL_CACHE_INDEX: {
+            CACHED_URL_DOCUMENT_TYPE: CACHED_URL_MAPPING
+        },
+        RESULTS_CACHE_INDEX: {
+            RESULTS_CACHE_DOCUMENT_TYPE: RESULTS_CACHE_MAPPING
+        },
+        TOP_CONTENT_INDEX: {
+            TOP_CONTENT_DOCUMENT_TYPE: TOP_CONTENT_MAPPING
+        }
+    }
 
-    es(universe).indices.put_mapping(USER_DOCUMENT_TYPE,
-        USER_MAPPING,
-        index=universe)
-    es(universe).indices.put_mapping(CONTENT_DOCUMENT_TYPE,
-        CONTENT_MAPPING,
-        index=universe)
-    es(universe).indices.put_mapping(TWEET_DOCUMENT_TYPE,
-        TWEET_MAPPING,
-        index=universe)
-    es(universe).indices.put_mapping(UNPROCESSED_TWEET_DOCUMENT_TYPE,
-        UNPROCESSED_TWEET_MAPPING,
-        index=universe)
+    for index_name, index_mapping in all_indices.items():
+        if not es(universe).indices.exists(index_name):
+            es(universe).indices.create(index=index_name)
+        for doc_type, doc_mapping in index_mapping.items():
+            es(universe).indices.put_mapping(
+                doc_type, doc_mapping, index=index_name)
 
+
+def get_all_docs(universe, index, doc_type, body={}, size=None, field='_id'):
+    """
+    Helper function to return all values in a certain field.
+    Defaults to retrieving all ids from a given index and doc type.
+
+    :arg universe: current universe.
+    :arg index: current index.
+    :arg doc_type: the type of doc to return all values for.
+    :arg body: add custom body, or leave blank to retrieve everything.
+    :arg size: limit by size, or leave as None to retrieve all.
+    :arg field: retrieve all of a specific field. Defaults to id.
+    """
+    chunk_size, start = 5000, 0
+    all_results = []
+    while True:
+        if field == '_id':
+            res = es(universe).search(index=universe, doc_type=doc_type,
+                body=body, size=chunk_size, from_=start,
+                _source=False)
+            all_results.extend(
+                [u['_id'] for u in res['hits']['hits']])
+        else:
+            res = es(universe).search(index=universe, doc_type=doc_type,
+                body=body, size=chunk_size, from_=start,
+                _source_include=[field])
+            all_results.extend(
+                [u['_source'][field] for u in res['hits']['hits']])
+        if size is None:
+            size = res['hits']['total']
+        start += chunk_size
+        if start >= size:
+            break
+    return all_results
+
+
+def cleanup(universe, days=30):
+    """Delete everything in the universe that is more than days old.
+    Does not apply to top content."""
+    client = es(universe)
+    actions = []
+
+    body = {
+        'filter': {
+            'range': {
+                'created': {
+                    'lt': 'now-%dd' % days
+                }
+            }
+        }
+    }
+
+    # Delete all tweets that are over days old
+    old_tweet_ids = get_all_docs(universe,
+        index=universe,
+        doc_type=TWEET_DOCUMENT_TYPE,
+        body=body)
+    for tweet_id in old_tweet_ids:
+        actions.append({
+            '_op_type': 'delete',
+            '_index': universe,
+            '_type': TWEET_DOCUMENT_TYPE,
+            '_id': tweet_id,
+        })
+
+    # Delete old cached results and urls
+    body['filter']['range']['cached_at'] = body['filter']['range'].pop('created')
+    old_results_ids = get_all_docs(universe,
+        index=RESULTS_CACHE_INDEX,
+        doc_type=RESULTS_CACHE_DOCUMENT_TYPE,
+        body=body)
+    for result_id in old_results_ids:
+        actions.append({
+            '_op_type': 'delete',
+            '_index': RESULTS_CACHE_INDEX,
+            '_type': RESULTS_CACHE_DOCUMENT_TYPE,
+            '_id': result_id
+        })
+    old_urls_ids = get_all_docs(universe,
+        index=URL_CACHE_INDEX,
+        doc_type=URL_CACHE_DOCUMENT_TYPE,
+        body=body)
+    for url in old_urls_ids:
+        actions.append({
+            '_op_type': 'delete',
+            '_index': URL_CACHE_INDEX,
+            '_type': URL_CACHE_DOCUMENT_TYPE,
+            '_id': url
+        })
+
+    # This actually deletes everything
+    bulk(client, actions)
+
+    # Now we can quickly get all content that doesn't have a tweet
+    all_urls = set(get_all_docs(universe, 
+        index=universe, 
+        doc_type=CONTENT_DOCUMENT_TYPE))
+    tweeted_urls = set(get_all_docs(universe,
+        index=universe,
+        doc_type=TWEET_DOCUMENT_TYPE,
+        field='content_url'))
+    obsolete_urls = all_urls - tweeted_urls
+
+    # Delete those too
+    actions = []
+    for url in obsolete_urls:
+        actions.append({
+            '_op_type': 'delete',
+            '_index': universe,
+            '_type': CONTENT_DOCUMENT_TYPE,
+            '_id': url
+            })
+    bulk(client, actions)
+    
 
 def get_cached_url(universe, url):
     """Get a resolved URL from the index.
@@ -130,10 +297,97 @@ def set_cached_url(universe, url, resolved_url):
     """Index a URL and its resolution in Elasticsearch"""
     body = {
         'url': url.rstrip('/'),
-        'resolved': resolved_url.rstrip('/')
+        'resolved': resolved_url.rstrip('/'),
+        'cached_at': now(stringify=True)
     }
     es(universe).index(index=URL_CACHE_INDEX,
         doc_type=CACHED_URL_DOCUMENT_TYPE, body=body, id=url)
+
+
+
+def add_to_results_cache(universe, hours, results):
+    """Cache a set of results under certain number of hours."""
+    body = {
+        'cached_at': now(stringify=True),
+        'hours_since': hours,
+        'results': results
+    }
+    es(universe).index(
+        index=RESULTS_CACHE_INDEX,
+        doc_type=RESULTS_CACHE_DOCUMENT_TYPE,
+        body=body)
+
+
+def get_score_stats(universe, hours=4):
+    """Get extended stats on the scores returned from the results cache.
+    :arg hours: type of query to search for."""
+    body = {
+        'aggregations': {
+            'fresh_queries': {
+                'filter': {
+                    'term': {
+                        'hours_since': hours
+                    }
+                },
+                'aggregations': {
+                    'scores': {
+                        'extended_stats': {
+                            'field': 'score'
+                        }
+                    }
+                }
+            }
+        }
+    }
+    res = es(universe).search(
+        index=RESULTS_CACHE_INDEX, 
+        doc_type=RESULTS_CACHE_DOCUMENT_TYPE, 
+        body=body)
+    return res['aggregations']['fresh_queries']['scores']
+
+
+def get_top_link(universe, hours=4, quantity=5):
+    """Search for any links in the current set that are a high enough score
+    to get into top links. Return one (and only one) if so."""
+    try:
+        top_links = get_items(universe, hours=hours, quantity=quantity)
+    except IndexError:
+        return None
+    score_stats = get_score_stats(universe, hours=hours)
+    # Treat a link as a top link if it's > 2 standard devs above the average
+    cutoff = score_stats['avg'] + (2 * score_stats['std_deviation'])
+    link_is_already_top = lambda link: es(universe).exists(
+        index=TOP_CONTENT_INDEX, 
+        doc_type=TOP_CONTENT_DOCUMENT_TYPE, 
+        id=link['url'])
+    for link in top_links:
+        if link['score'] >= cutoff and not link_is_already_top(link):
+            # We only want one at a time even if more than 1 are in the results
+            return link
+    return None
+
+
+def add_to_top_links(universe, link):
+    """Index a new top link to the given universe."""
+    es(universe).index(
+        index=TOP_CONTENT_INDEX, 
+        doc_type=TOP_CONTENT_DOCUMENT_TYPE,
+        id=link['url'],
+        body=link)
+
+
+def get_recent_top_links(universe, quantity=20):
+    """Get the most recently added top links in the given universe."""
+    body = {
+        'sort': [{
+            'tweet.created': {
+                'order': 'desc'
+            }
+        }]
+    }
+    res = es(universe).search(index=TOP_CONTENT_INDEX, 
+        doc_type=TOP_CONTENT_DOCUMENT_TYPE, body=body, size=quantity)
+    return [r['_source'] for r in res['hits']['hits']]
 
 
 def save_content(universe, content):
@@ -176,18 +430,11 @@ def get_user_ids(universe, size=None):
             }
         }]
     }
-    chunk_size = size or 5000
-    start = 0
-    user_ids = []
-    while True:
-        res = es(universe).search(index=universe, doc_type=USER_DOCUMENT_TYPE,
-            body=body, size=chunk_size, from_=start, _source=False)
-        user_ids.extend([u['_id'] for u in res['hits']['hits']])
-        if size is None:
-            size = res['hits']['total']
-        start += chunk_size
-        if start >= size:
-            break
+    user_ids = get_all_docs(universe, 
+        index=universe, 
+        doc_type=USER_DOCUMENT_TYPE,
+        body=body,
+        size=size)
     return user_ids
 
 
@@ -229,7 +476,8 @@ def save_tweet(universe, tweet):
         body=tweet)
 
 
-def get_universe_tweets(universe, query=None, start=24, end=None, size=100):
+def get_universe_tweets(universe, query=None, quantity=20, 
+                        hours=24, start=None, end=None):
     """
     Get tweets in a given universe.
 
@@ -244,10 +492,7 @@ def get_universe_tweets(universe, query=None, start=24, end=None, size=100):
     :arg size: number of tweets to return
     """
 
-    if not end:
-        end = datetime.datetime.utcnow()
-    if isinstance(start, int):
-        start = end - datetime.timedelta(hours=start)
+    start, end = get_query_dates(start, end, hours)
 
     # Build query based on what was in the input
     if query is None:
@@ -261,13 +506,13 @@ def get_universe_tweets(universe, query=None, start=24, end=None, size=100):
     body['filter'] = {
         'range': {
             'created': {
-                'gte': format_date(start),
-                'lte': format_date(end)
+                'gte': start,
+                'lte': end
             }
         }
     }
     res = es(universe).search(index=universe, doc_type=TWEET_DOCUMENT_TYPE,
-        body=body, size=size)
+        body=body, size=quantity)
     return [tweet['_source'] for tweet in res['hits']['hits']]
 
 
@@ -323,18 +568,20 @@ def search_items(universe, term, quantity=100):
     for index, hit in enumerate(res):
         result = hit['_source']
         if hit['_type'] == CONTENT_DOCUMENT_TYPE:
-            try:
-                matching_tweet = filter(
-                    lambda r: 'content_url' in r['_source'] and r['_source']['content_url'] == result['url'],
-                    res[index+1:])[0]
-            except IndexError:
-                pass
-            else:
-                result['tweet'] = res.pop(res.index(matching_tweet))['_source']
+            matching_tweets = filter(
+                lambda r: 'content_url' in r['_source'] and \
+                          r['_source']['content_url'] == result['url'],
+                res[index+1:])
+            if matching_tweets:
+                for tweet in matching_tweets:
+                    popped_tweet = res.pop(res.index(tweet))
+                    if not result.get('tweet'):
+                        result['tweet'] = popped_tweet['_source']
         else:
             try:
                 matching_content = filter(
-                    lambda r: 'url' in r['_source'] and r['_source']['url'] == result['content_url'],
+                    lambda r: 'url' in r['_source'] and 
+                              r['_source']['url'] == result['content_url'],
                     res[index+1:])[0]
             except IndexError:
                 result = {
@@ -354,7 +601,8 @@ def search_items(universe, term, quantity=100):
 
 
 def get_user_weights(universe, user_ids):
-    """Takes a list of user ids and returns a dict with their weighted influence."""
+    """Takes a list of user ids and returns a dict 
+    with their weighted influence."""
     res = es(universe).mget({'ids': list(set(user_ids))}, 
         index=universe, doc_type=USER_DOCUMENT_TYPE)['docs']
     users = filter(lambda u: u['found'], res)
@@ -386,9 +634,10 @@ def score_link(link, user_weights, time_decay=True, hours=24):
             (tweeter['key'], tweeter_influence, score))
     if time_decay:
         score_factor = lambda hrs_since: 1 - math.log(hrs_since + 1) / hours
+
         first_tweeted = link['first_tweet']['hits']['hits'][0]['sort'][0]
-        time_diff = datetime.datetime.utcnow() - epoch_to_datetime(first_tweeted)
-        hours_since = int(time_diff.total_seconds()) / 60 / 60
+        hours_since = get_since_now(first_tweeted, 
+            time_type='hour', stringify=False)[0]
         orig_score = score
         score *= score_factor(hours_since)
         score_explanation.append(
@@ -397,23 +646,21 @@ def score_link(link, user_weights, time_decay=True, hours=24):
     return score, score_explanation
 
 
-def get_items(universe, quantity=20, hours=24, daterange=None, time_decay=True):
+def get_items(universe, quantity=20, hours=24, 
+              start=None, end=None, time_decay=True):
     """
     The default function: gets the most popular links shared 
     from a given universe and time frame.
 
     :arg quantity: number of links to return
-    :arg hours: hours since now to search through
-    :arg daterange: list or tuple with start and end dates (python datetimes, UTC)
-        this will override hours, and cannot be used with time_decay
-    :arg time_decay: whether or not to decay the score based on the time of its first tweet
+    :arg hours: hours since end to search through.
+    :arg start: start datetime in UTC. Defaults to hours.
+    :arg end: end datetime in UTC. Defaults to now.
+    :arg time_decay: whether or not to decay the score based on the time
+        of its first tweet.
     """
 
-    if daterange is not None:
-        assert time_decay is False, 'No time decay on a fixed daterange search'
-        start, end = format_date(daterange[0]), format_date(daterange[1])
-    else:
-        start, end = 'now-%dh' % hours, 'now'
+    start, end = get_query_dates(start, end, hours)
     search_limit = quantity * 5 if time_decay else quantity * 2
 
     # Get the top links in the given time frame, and some extra agg metadata
@@ -481,10 +728,8 @@ def get_items(universe, quantity=20, hours=24, daterange=None, time_decay=True):
     for link in links:
         link['score'], link['score_explanation'] = score_link(
                 link, user_weights, time_decay=time_decay, hours=hours)
-    sorted_links = sorted(links, key=lambda link: link['score'], reverse=True)[:quantity]
-
-    # Save the scores so we can return them
-    score_map = dict([(link['key'], (link['score'], link['score_explanation'])) for link in sorted_links])
+    sorted_links = sorted(links, 
+        key=lambda link: link['score'], reverse=True)[:quantity]
 
     # Get the full metadata for these urls.
     top_urls = [url['key'] for url in sorted_links]
@@ -501,15 +746,12 @@ def get_items(universe, quantity=20, hours=24, daterange=None, time_decay=True):
 
         # Add the first time the link was tweeted, and the score
         link_match = filter(lambda l: l['key'] == link['url'], links)[0]
-        link['score'] = [link_match['score'], link_match['score_explanation']]
+        link['score'] = link_match['score']
+        link['score_explanation'] = link_match['score_explanation']
         
         tweet = link_match['first_tweet']['hits']['hits'][0]
-        link['first_tweeted'] = get_time_since_now(epoch_to_datetime(tweet['sort'][0]))
-        link['tweet'] = {
-            'user_screen_name': tweet['_source']['user_screen_name'],
-            'text': tweet['_source']['text'],
-            'user_profile_image_url': tweet['_source']['user_profile_image_url']
-        }
+        link['first_tweeted'] = get_since_now(tweet['sort'][0])
+        link['tweet'] = tweet['_source']
         top_links.append(link)
     return top_links
 
@@ -536,35 +778,3 @@ def get_top_providers(universe, size=2000):
         size=0)
     return [i['key'] for i in res['aggregations']['providers']['buckets']]
 
-
-def format_date(dt):
-    """Convert a datetime to an elasticsearch-formatted datestring (UTC)."""
-    return dt.strftime('%a %b %d %H:%M:%S +0000 %Y')
-
-
-def epoch_to_datetime(epoch):
-    """Converts unix timestamp to python datetime (UTC)."""
-    return datetime.datetime(*time.gmtime(epoch / 1000)[:7])
-
-
-def get_time_since_now(start_time):
-    """
-    Accepts a UTC datetime, and gets the number of 
-    days/hours/minutes/seconds ago, as a string.
-    """
-    now = datetime.datetime.utcnow()
-    diff = now - start_time
-    time_map = (
-        ('day', diff.days),
-        ('hour', diff.seconds / 60 / 60),
-        ('minute', diff.seconds / 60),
-        ('second', diff.seconds)
-    )
-    # Loop through each amount, and if there are any, return its value
-    for word, amt in time_map:
-        if amt > 1:
-            return "%d %ss" % (amt, word)
-        elif amt == 1:
-            return "%d %s" % (amt, word)
-    # Since it goes down to seconds, you probably shouldn't get here
-    return 'just now'
