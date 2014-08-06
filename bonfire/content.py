@@ -233,10 +233,13 @@ class NewspaperFetcher(object):
                  self.get_twitter_image()
         if not result:
             result = [self.article.top_image, 0, 0]
+        if not result[0]:
+            return result
         result[0] = self._add_domain(result[0])
         if not all(result[1:]):
-            width, height = self.get_image_dimensions(result[0])
-            result[1], result[2] = height, width
+            dimensions = self.get_image_dimensions(result[0])
+            if dimensions:
+                result[1], result[2] = dimensions[1], dimensions[0]
         return result
 
     def get_authors(self):
