@@ -1,4 +1,5 @@
 #!/usr/bin/env python
+import os
 import sys
 from flask import Flask, render_template, request, jsonify
 from werkzeug.contrib.atom import AtomFeed
@@ -135,6 +136,10 @@ def feed():
     return feed.get_response()
 
 
+global universe
+if 'BONFIRE_UNIVERSE' in os.environ:
+    universe = os.environ.get('BONFIRE_UNIVERSE')
+
 USAGE = """
 USAGE:
 
@@ -143,7 +148,6 @@ USAGE:
 """
 
 if __name__ == "__main__":
-    global universe
     try:
         universe = sys.argv[1]
         app.run(debug=True)
