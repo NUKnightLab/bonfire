@@ -1,5 +1,6 @@
 import logging
 import time
+from collections import deque
 from elasticsearch.exceptions import ConnectionError
 from .db import build_universe_mappings, next_unprocessed_tweet, \
                 save_tweet, save_content, get_cached_url, set_cached_url
@@ -17,10 +18,12 @@ def process_universe_rawtweets(universe, build_mappings=True):
     """
     if build_mappings:
         build_universe_mappings(universe)
+    recent_tweets = deque([], 5)
     try:
         while True:
-            raw_tweet = next_unprocessed_tweet(universe)
+            raw_tweet = next_unprocessed_tweet(universe, not_ids=list(recent_tweets))
             if raw_tweet:
+                recent_tweets.append(raw_tweet['_id'])
                 process_rawtweet(universe, raw_tweet)
                 # Check how far behind the collector we are
                 if get_since_now(raw_tweet['_source']['created_at'], 'second') > 300:
