@@ -486,13 +486,18 @@ def next_unprocessed_tweet(universe, not_ids=None):
             id=result['_id'], version=result['_version'])
     except NotFoundError:
         # Something's wrong. Ignore it for now.
-        return next_unprocessed_tweet(universe)
+        logger().info('Could not find raw tweet %s.' % result['_id'])
+        return next_unprocessed_tweet(universe, not_ids=not_ids)
     except ConflictError:
         # Could happen if another processor grabbed and deleted this tweet,
         # or state is otherwise inconsistent.
-        logger().debug('Version conflict. Skipping raw tweet ID: %s' % (
+        logger().info('Version conflict. Skipping raw tweet ID: %s' % (
             result['_id']))
-        return next_unprocessed_tweet(universe, not_ids=[result['_id']])
+        if not_ids is None:
+            not_ids = [result['_id']]
+        else:
+            not_ids.append(result['_id'])
+        return next_unprocessed_tweet(universe, not_ids=not_ids)
     logger().debug('Dequeued raw tweet: %s' % result['_id'])
     return result
 
