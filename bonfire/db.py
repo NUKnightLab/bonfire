@@ -588,7 +588,7 @@ def search_items(universe, term, quantity=100):
         'query': {
             'multi_match': {
                 'query': term,
-                'fields': ['title', 'description', 'text']
+                'fields': ['title', 'description', 'text', 'tags']
             }
         }
     }
