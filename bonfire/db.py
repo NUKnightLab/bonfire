@@ -629,6 +629,8 @@ def search_items(universe, term, quantity=100):
                 result['type'] = 'content'
                 result['tweet'] = tweet
         result['rank'] = index + 1
+        if 'tweet' in result:
+            result['first_tweeted'] = get_since_now(result['tweet']['created'])
         formatted_results.append(result)
 
     return formatted_results

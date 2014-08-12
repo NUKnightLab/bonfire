@@ -77,6 +77,7 @@ def top_links(raw_params):
     if 'term' in params:
         args = [params.pop('term')]
         params.pop('hours')
+        params.pop('time_decay')
         links = search_items(universe, *args, **params)
     else:
         links = get_items(universe, **params)
