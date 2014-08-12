@@ -1,14 +1,37 @@
 import logging
 import time
 from collections import deque
+import requests
 from elasticsearch.exceptions import ConnectionError
 from .db import build_universe_mappings, next_unprocessed_tweet, \
                 save_tweet, save_content, get_cached_url, set_cached_url
 from .content import extract
 from .dates import get_since_now
 
+USER_AGENT = 'Mozilla/5.0 (compatible; Googlebot/2.1; +http://www.google.com/bot.html)'
+
 def logger():
-    return  logging.getLogger(__name__)
+    return logging.getLogger(__name__)
+
+
+def create_session():
+    """Create a requests session optimized for many connections."""
+    session = requests.Session()
+
+    session.headers['User-Agent'] = USER_AGENT
+    session.max_redirects = 3
+
+    http_adapter = requests.adapters.HTTPAdapter()
+    https_adapter = requests.adapters.HTTPAdapter()
+    http_adapter.pool_connections = 20
+    http_adapter.pool_maxsize = 20
+    http_adapter.max_retries = 1
+    https_adapter.pool_connections = 20
+    https_adapter.pool_maxsize = 20
+    https_adapter.max_retries = 1
+    session.mount('http://', http_adapter)
+    session.mount('https://', https_adapter)
+    return session
 
 
 def process_universe_rawtweets(universe, build_mappings=True):
@@ -21,6 +44,7 @@ def process_universe_rawtweets(universe, build_mappings=True):
         logger().info('Building the universe.')
         build_universe_mappings(universe)
     recent_tweets = deque([], 5)
+    session = create_session()
     while True:
         try:
             logger().debug('Looking for new tweet.')
@@ -36,7 +60,7 @@ def process_universe_rawtweets(universe, build_mappings=True):
                     logger().warn(
                         'Processor is %d seconds behind collector.' % \
                         seconds_ago)
-                process_rawtweet(universe, raw_tweet)
+                process_rawtweet(universe, raw_tweet, session=session)
             else:
                 logger().debug('No new tweet. Waiting.')
                 # Wait for a new tweet
@@ -45,15 +69,18 @@ def process_universe_rawtweets(universe, build_mappings=True):
             logger().warn('Connection failed: %s %s' % (err, err.message))
             time.sleep(5)
             break
+    session.close()
     logger().info('Retrying.')
     return process_universe_rawtweets(universe, build_mappings=False)
 
 
-def process_rawtweet(universe, raw_tweet):
+def process_rawtweet(universe, raw_tweet, session=None):
     """
     Take a raw tweet from the queue, extract and save metadata from its content,
     then save as a processed tweet.
     """
+    if session is None:
+        session = create_session()
 
     # First extract content
     urls = [u['expanded_url'] for u in raw_tweet['_source']['entities']['urls']]
@@ -63,9 +90,10 @@ def process_rawtweet(universe, raw_tweet):
         if resolved_url is None:
             # No-- go extract it
             try:
-                article = extract(url)
+                response = session.get(url, timeout=7)
+                article = extract(response.url, html=response.text)
             except Exception as e:
-                logger().error("\tFAIL on url %s, message %s" % (
+                logger().info("Failed to process url %s, message %s" % (
                     url, e.message))
                 continue
             resolved_url = article['url']
