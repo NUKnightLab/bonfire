@@ -67,15 +67,15 @@ def cleanup_universe(universe, days=30):
     cleanup(universe, days=days)
 
 
-def cache_queries(universe, top_links=False):
+def cache_queries(universe, top_links=False, tweet=False):
     for hours in CACHE_HOURS:
         results = get_items(universe, hours=hours)
         add_to_results_cache(universe, hours, results)
     if top_links:
-        update_top_links(universe)
+        update_top_links(universe, tweet=tweet)
 
 
-def update_top_links(universe, tweet=True):
+def update_top_links(universe, tweet=False):
     top_link = get_top_link(universe)
     if top_link is not None:
         add_to_top_links(universe, top_link)
