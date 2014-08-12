@@ -5,7 +5,7 @@ from urlparse import urlparse, urljoin
 
 # These are url domains/excepts that newspaper's URL sanitizer handles poorly.
 # Add to these flags if you want to keep request arguments, etc.
-NEWSPAPER_FLAGS = set(('youtube.com'))
+NEWSPAPER_FLAGS = set(('youtube.com',))
 
 # Known url shortening domains.
 # Newspaper sometimes assumes that shortened domains are canonical, so this
