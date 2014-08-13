@@ -1,7 +1,10 @@
+import logging
 from birdy.twitter import UserClient, StreamClient
 from .config import get_twitter_keys
 from .db import get_user_ids, enqueue_tweet
 
+def logger():
+    return logging.getLogger(__name__)
 
 _clients = {}
 def client(universe):
@@ -48,9 +51,11 @@ def collect_universe_tweets(universe):
     Limited to the top 5000 users by API limitation."""
     users = set(get_user_ids(universe, size=5000))
     client = stream_client(universe)
+    logger().info('Connecting to universe %s with users %s' % (universe, ', '.join(users)))
     response = client.stream.statuses.filter.post(follow=','.join(users))
     for tweet in response.stream():
         if 'entities' in tweet \
                 and tweet['entities']['urls'] \
                 and tweet['user']['id_str'] in users:
+            logger().debug('Enqueuing new tweet %s' % tweet['id_str'])
             enqueue_tweet(universe, tweet)

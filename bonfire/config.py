@@ -33,7 +33,7 @@ def get(section, option, default=None):
 def config_file_path():
     return os.getenv(BONFIRE_CONFIG_ENV_VAR,
         os.path.join(DEFAULT_CONFIG_DIR, DEFAULT_CONFIG_FILE))
-    
+
 
 def get_universe_seed(universe):
     config = configuration()
@@ -63,12 +63,9 @@ def get_twitter_keys(universe):
     return k
 
 
-def get_elasticsearch_hosts(universe=None):
+def get_elasticsearch_hosts(universe):
     config = configuration()
-    if universe is None:
-        hosts = config.get('bonfire', 'elasticsearch_hosts')
-    else:
-        hosts = config.get('universe:%s' % universe, 'elasticsearch_hosts')
+    hosts = config.get('universe:%s' % universe, 'elasticsearch_hosts')
     return [s.strip() for s in CONFIG_LIST_REGEX.split(hosts) if s.strip()]
 
 

@@ -97,11 +97,12 @@ def process(universe):
 @click.command()
 @click.argument('universe', default=DEFAULT_UNIVERSE,
     type=click.Choice(UNIVERSES))
-@click.option('--top/--no-top', default=False)
-def cache(universe, top):
+@click.option('--top_links', is_flag=True)
+@click.option('--tweet', is_flag=True)
+def cache(universe, top_links, tweet):
     """Cache common results from a universe."""
     click.echo('Caching universe: %s' % universe)
-    cache_queries(universe, top_links=top)
+    cache_queries(universe, top_links=top_links, tweet=tweet)
 
 
 @click.command()
@@ -110,6 +111,7 @@ def cache(universe, top):
 @click.option('--days', default=30,
     help='Number of days ago to consider something old.')
 def cleanup(universe, days):
+    """Delete old records from a universe index."""
     cleanup_universe(universe, days=days)
 
 

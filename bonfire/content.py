@@ -5,7 +5,7 @@ from urlparse import urlparse, urljoin
 
 # These are url domains/excepts that newspaper's URL sanitizer handles poorly.
 # Add to these flags if you want to keep request arguments, etc.
-NEWSPAPER_FLAGS = set(('youtube.com'))
+NEWSPAPER_FLAGS = set(('youtube.com',))
 
 # Known url shortening domains.
 # Newspaper sometimes assumes that shortened domains are canonical, so this
@@ -79,7 +79,8 @@ def extract(url, html=None):
 
     :arg html: if provided, skip downloading and go straight to parsing html.
     """
-    article = Article(url)
+    # Set the language for now otherwise we get weird bugs
+    article = Article(url, language='en')
 
     # Check for any flags that newspaper handles poorly.
     if html is None and any(item in url for item in NEWSPAPER_FLAGS):
@@ -233,8 +234,8 @@ class NewspaperFetcher(object):
                  self.get_twitter_image()
         if not result:
             result = [self.article.top_image, 0, 0]
-        if not result[0]:
-            return result
+        if not result[0] or isinstance(result[0], int):
+            return ["", 0, 0]
         result[0] = self._add_domain(result[0])
         if not all(result[1:]):
             dimensions = self.get_image_dimensions(result[0])
