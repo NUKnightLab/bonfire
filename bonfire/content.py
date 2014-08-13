@@ -234,8 +234,8 @@ class NewspaperFetcher(object):
                  self.get_twitter_image()
         if not result:
             result = [self.article.top_image, 0, 0]
-        if not result[0]:
-            return result
+        if not result[0] or isinstance(result[0], int):
+            return ["", 0, 0]
         result[0] = self._add_domain(result[0])
         if not all(result[1:]):
             dimensions = self.get_image_dimensions(result[0])
