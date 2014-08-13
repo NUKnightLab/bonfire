@@ -93,8 +93,8 @@ def process_rawtweet(universe, raw_tweet, session=None):
                 response = session.get(url, timeout=7)
                 article = extract(response.url, html=response.text)
             except Exception as e:
-                logger().info("Failed to process url %s, message %s" % (
-                    url, e.message))
+                logger().info("Failed to process url %s due to %s, message %s" % (
+                    url, e, e.message))
                 continue
             resolved_url = article['url']
             # Add it to the URL cache and save it
