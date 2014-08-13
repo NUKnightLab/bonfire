@@ -19,7 +19,7 @@ def create_session():
     session = requests.Session()
 
     session.headers['User-Agent'] = USER_AGENT
-    session.max_redirects = 3
+    session.max_redirects = 5
 
     http_adapter = requests.adapters.HTTPAdapter()
     https_adapter = requests.adapters.HTTPAdapter()

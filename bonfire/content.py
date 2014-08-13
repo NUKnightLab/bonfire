@@ -79,7 +79,8 @@ def extract(url, html=None):
 
     :arg html: if provided, skip downloading and go straight to parsing html.
     """
-    article = Article(url)
+    # Set the language for now otherwise we get weird bugs
+    article = Article(url, language='en')
 
     # Check for any flags that newspaper handles poorly.
     if html is None and any(item in url for item in NEWSPAPER_FLAGS):
