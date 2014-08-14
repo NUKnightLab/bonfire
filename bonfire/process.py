@@ -62,6 +62,7 @@ def process_universe_rawtweets(universe, build_mappings=True):
                         seconds_ago)
                 process_rawtweet(universe, raw_tweet, session=session)
             else:
+                session.close()
                 logger().debug('No new tweet. Waiting.')
                 # Wait for a new tweet
                 time.sleep(5)
@@ -91,10 +92,16 @@ def process_rawtweet(universe, raw_tweet, session=None):
             # No-- go extract it
             try:
                 response = session.get(url, timeout=7)
+            except Exception as e:
+                logger().info("Failed to access url %s due to %s, message %s" % (
+                    url, e, e.message))
+                continue
+            try:
                 article = extract(response.url, html=response.text)
             except Exception as e:
                 logger().info("Failed to process url %s due to %s, message %s" % (
                     url, e, e.message))
+                response.connection.close()
                 continue
             resolved_url = article['url']
             # Add it to the URL cache and save it
