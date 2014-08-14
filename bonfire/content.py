@@ -1,7 +1,12 @@
 import requests
-from newspaper import Article
-from newspaper.images import fetch_image_dimension
+newspaper = None
+try:
+    from newspaper import Article
+    from newspaper.images import fetch_image_dimension
+except ImportError:
+    pass
 from urlparse import urlparse, urljoin
+from .extract import ArticleExtractor
 
 # These are url domains/excepts that newspaper's URL sanitizer handles poorly.
 # Add to these flags if you want to keep request arguments, etc.
@@ -79,57 +84,50 @@ def extract(url, html=None):
 
     :arg html: if provided, skip downloading and go straight to parsing html.
     """
-    # Set the language for now otherwise we get weird bugs
-    article = Article(url, language='en')
-
-    # Check for any flags that newspaper handles poorly.
-    if html is None and any(item in url for item in NEWSPAPER_FLAGS):
-        html = requests.get(url, timeout=7).text
-
-    if html is None:
-        article.download()
+    if newspaper is not None:
+        f = NewspaperFetcher(url)
     else:
-        article.set_html(html)
-    article.parse()
-    f = NewspaperFetcher(article)
-
-    image = f.get_image()
+        f = DefaultFetcher(url)
+    img, img_h, img_w = f.get_image()
     result = {
         'url': f.get_canonical_url() or url.rstrip('/'),
         'provider': f.get_provider() or '',
         'title': f.get_title() or '',
         'description': f.get_description() or '',
-        'text': article.text or '',
-        #'published': f.get_published() or None,
+        'text': f.get_text() or '',
         'authors': f.get_authors() or '',
-        'img': image[0],
-        'img_h': image[1],
-        'img_w': image[2],
+        'img': img,
+        'img_h': img_h,
+        'img_w': img_w,
         'player': f.get_twitter_player(),
         'favicon': f.get_favicon(),
         'tags': f.get_tags(),
-        'opengraph_type': article.meta_data.get('og', {}).get('type', ''),
-        'twitter_type': article.meta_data.get('twitter', {}).get('card', ''),
+        'opengraph_type': f.get_metadata().get('og', {}).get('type', ''),
+        'twitter_type': f.get_metadata().get('twitter', {}).get('card', ''),
         'twitter_creator': f.get_twitter_creator()
     }
     return result
 
 
-class NewspaperFetcher(object):
+class DefaultFetcher(object):
     """
-    Smartly fetches metadata from a newspaper article, and cleans the results.
+    Class to fetch article from a URL.
     """
 
-    def __init__(self, newspaper_article):
-        self.article = newspaper_article
+    def __init__(self, url):
         self.resolved_url = ''
+        self.extractor = ArticleExtractor(url=url)
+
+    def get_metadata(self):
+        #return self.article.meta_data
+        pass
 
     def _get_resolved_url(self):
         """Fallback in case newspaper can't find a good canonical url."""
         if not self.resolved_url:
             self.resolved_url = requests.head(self.article.url, 
                 timeout=7, allow_redirects=True).url
-        return self.resolved_url
+        return self.resolved_url.rstrip('/')
 
     def _add_domain(self, url):
         """Add the domain if the URL is relative."""
@@ -149,9 +147,137 @@ class NewspaperFetcher(object):
         If none of these work or newspaper guesses a short-url domain,
         it gives up and requests the url to get its final redirect.
         """
-        canonical_url = self.article.meta_data.get('og', {}).get('url', '').strip() or\
-                        self.article.meta_data.get('twitter', {}).get('url', '').strip() or\
-                        self.article.canonical_link.strip()
+        return self._get_resolved_url()
+
+    def get_provider(self):
+        """Returns a prettified domain for the resource, stripping www."""
+        return urlparse(self.get_canonical_url()).netloc.replace('www.', '')
+
+    def get_title(self):
+        """Retrieve title."""
+        return self.extractor.title
+
+    def get_text(self):
+        """Get the article text."""
+        return self.extractor.get_article_text()
+
+    def get_description(self):
+        """Retrieve description from opengraph, twitter, or meta tags."""
+        return None
+
+    def get_favicon(self):
+        """Retrieve favicon url from article tags or from
+        `<http://g.etfv.co>`_"""
+        return None
+
+    def get_twitter_player(self):
+        """Retrieve default player for twitter cards."""
+        return None
+
+    def get_twitter_creator(self):
+        """Retrieve twitter username of the creator."""
+        return None
+
+    def get_twitter_image(self):
+        """Retrieve twitter image for the resource from
+        twitter:image.src or twitter.image."""
+        return (None, None, None)
+
+    def get_facebook_image(self):
+        """Retrieve opengraph image for the resource."""
+        return (None, None, None)
+
+    def get_image_dimensions(self, img_url):
+        return None
+
+    def get_image(self):
+        """
+        Retrieve a favorite image for the resource, checking in this order:
+            - opengraph
+            - twitter
+            - newspaper's top image.
+        """
+        result = self.get_facebook_image() or \
+                 self.get_twitter_image()
+        if not result:
+            result = [self.article.top_image, 0, 0]
+        if not result[0]:
+            return result
+        result[0] = self._add_domain(result[0])
+        if not all(result[1:]):
+            dimensions = self.get_image_dimensions(result[0])
+            if dimensions:
+                result[1], result[2] = dimensions[1], dimensions[0]
+        return result
+
+    def get_authors(self):
+        """Retrieve an author or authors. This works very sporadically."""
+        return self.extractor.author
+
+    def get_published(self):
+        """Retrieve a published date. This almost never gets anything."""
+        return None
+
+    def get_tags(self):
+        """
+        Retrive a comma-separated list of all keywords, categories,and tags,
+        flattened:
+            - opengraph tags + sections
+            - keywords + meta_keywords
+            - tags
+        """
+        return None
+
+
+class NewspaperFetcher(object):
+    """
+    Smartly fetches metadata from a newspaper article, and cleans the results.
+    """
+
+    def __init__(self, url):
+        self.resolved_url = ''
+        article = Article(url)
+        if html is None and any(item in url for item in NEWSPAPER_FLAGS):
+            html = requests.get(url, timeout=7).text
+        if html is None:
+            article.download()
+        else:
+            article.set_html(html)
+        article.parse()
+        self.article = article
+
+    def _get_resolved_url(self):
+        """Fallback in case newspaper can't find a good canonical url."""
+        if not self.resolved_url:
+            self.resolved_url = requests.head(self.article.url, 
+                timeout=7, allow_redirects=True).url
+        return self.resolved_url
+
+    def _add_domain(self, url):
+        """Add the domain if the URL is relative."""
+        if not url or url.startswith('http'):
+            return url
+        parsed_uri = urlparse(self.get_canonical_url())
+        domain = "{uri.scheme}://{uri.netloc}".format(uri=parsed_uri)
+        return urljoin(domain, url)
+
+    def get_metadata(self):
+        return self.article.meta_data
+
+    def get_canonical_url(self):
+        """
+        Main function for determining the canonical url. Check as follows:
+            - opengraph url (og:url)
+            - twitter url (twitter:url)
+            - newspaper's guess (usually from meta tags)
+
+        If none of these work or newspaper guesses a short-url domain,
+        it gives up and requests the url to get its final redirect.
+        """
+        canonical_url = \
+            self.article.meta_data.get('og', {}).get('url', '').strip() or \
+            self.article.meta_data.get('twitter', {}).get('url', '').strip() or\
+            self.article.canonical_link.strip()
         # Make sure it's not a short-url domain
         if not canonical_url or urlparse(canonical_url).netloc in SHORT_URLS:
             canonical_url = self._get_resolved_url()
@@ -163,21 +289,31 @@ class NewspaperFetcher(object):
 
     def get_title(self):
         """Retrieve title from opengraph, twitter, or meta tags."""
-        return self.article.meta_data.get('og', {}).get('title', '').strip() or\
-               self.article.meta_data.get('twitter', {}).get('title', '').strip() or\
-               self.article.title.strip()
+        return \
+            self.article.meta_data.get('og', {}).get('title', '').strip() or \
+            self.article.meta_data.get('twitter', {}).get('title', '').strip() or \
+            self.article.title.strip()
+
+    def get_text(self):
+        """Get the article text."""
+        return self.article.text
 
     def get_description(self):
         """Retrieve description from opengraph, twitter, or meta tags."""
-        return self.article.meta_data.get('og', {}).get('description', '').strip() or\
-               self.article.meta_data.get('twitter', {}).get('description', '').strip() or\
-               self.article.summary.strip() or \
-               self.article.meta_description.strip()
+        return \
+            self.article.meta_data.get('og', {}).get('description', '')\
+                .strip() or \
+            self.article.meta_data.get('twitter', {})\
+                .get('description', '').strip() or \
+            self.article.summary.strip() or \
+            self.article.meta_description.strip()
 
     def get_favicon(self):
-        """Retrieve favicon url from article tags or from `<http://g.etfv.co>`_"""
+        """Retrieve favicon url from article tags or from
+        `<http://g.etfv.co>`_"""
         favicon_url = self.article.meta_favicon or \
-                      'http://g.etfv.co/%s?defaulticon=none' % self.get_canonical_url()
+            'http://g.etfv.co/%s?defaulticon=none' % (
+                self.get_canonical_url())
         return self._add_domain(favicon_url)
 
     def get_twitter_player(self):
@@ -189,7 +325,8 @@ class NewspaperFetcher(object):
 
     def get_twitter_creator(self):
         """Retrieve twitter username of the creator."""
-        creator = self.article.meta_data.get('twitter', {}).get('creator', '')
+        creator = self.article.meta_data.get(
+            'twitter', {}).get('creator', '')
         if isinstance(creator, dict):
             creator = creator.get('url', '') or \
                       creator.get('src', '') or \
@@ -197,16 +334,16 @@ class NewspaperFetcher(object):
         return creator.lstrip('@')
 
     def get_twitter_image(self):
-        """Retrieve twitter image for the resource."""
+        """Retrieve twitter image for the resource from
+        twitter:image.src or twitter.image."""
         img = self.article.meta_data.get('twitter', {}).get('image', '')
         height, width = 0, 0
-        # Sometimes the image is at twitter:image:src rather than twitter:image
         if isinstance(img, dict):
             height = img.get('height', 0)
             width = img.get('width', 0)
             img = img.get('src', '') or \
                   img.get('url', '')
-        return [img, height, width]
+        return (img, height, width)
 
     def get_facebook_image(self):
         """Retrieve opengraph image for the resource."""
@@ -221,7 +358,8 @@ class NewspaperFetcher(object):
         return [img, height, width]
 
     def get_image_dimensions(self, img_url):
-        return fetch_image_dimension(img_url, self.article.config.browser_user_agent)
+        return fetch_image_dimension(
+            img_url, self.article.config.browser_user_agent)
 
     def get_image(self):
         """
@@ -246,22 +384,26 @@ class NewspaperFetcher(object):
     def get_authors(self):
         """Retrieve an author or authors. This works very sporadically."""
         return ', '.join(self.article.authors) or \
-               self.article.meta_data.get('og', {}).get('article', {}).get('author', '')
+            self.article.meta_data.get('og', {})\
+            .get('article', {}).get('author', '')
 
     def get_published(self):
         """Retrieve a published date. This almost never gets anything."""
         return self.article.published_date.strip() or \
-               self.article.meta_data.get('og', {}).get('article', {}).get('published_time')
+            self.article.meta_data.get('og', {}).get('article', {})\
+            .get('published_time')
 
     def get_tags(self):
         """
-        Retrive a comma-separated list of all keywords, categories, and tags, flattened:
+        Retrive a comma-separated list of all keywords, categories,and tags,
+        flattened:
             - opengraph tags + sections
             - keywords + meta_keywords
             - tags
         """
-        og_results = self.article.meta_data.get('og', {}).get('tag', '').split(',') + \
-                     [self.article.meta_data.get('og', {}).get('section', '')]
+        og_results = self.article.meta_data.get('og', {}).get('tag', '')\
+            .split(',') + \
+            [self.article.meta_data.get('og', {}).get('section', '')]
         all_candidates = list(set(self.article.keywords + \
             self.article.meta_keywords + list(self.article.tags) + og_results))
         return ', '.join(filter(lambda i: i, all_candidates))
