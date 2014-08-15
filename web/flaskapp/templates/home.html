@@ -69,11 +69,13 @@
                   <img src="{{ link.img }}" style="width: 310px; height:162px;" />
                   <hr />
                 {% endif %}
-                {% if link.tweet %}
-                  <div class="twitter-tweet">
-                    <img class="tweet-image" src="{{ link.tweet.user_profile_image_url }}" width="40" height="40" alt="{{ link.tweet.user_screen_name }}'s profile photo" />
-                    <span>@{{ link.tweet.user_screen_name }}: {{ link.tweet.text }}</span>
-                  </div>
+                {% if link.tweets %}
+                  {% for tweet in link.tweets %}
+                    <div class="twitter-tweet">
+                      <img class="tweet-image" src="{{ tweet.user_profile_image_url }}" width="40" height="40" alt="{{ tweet.user_screen_name }}'s profile photo" />
+                      <span>@{{ tweet.user_screen_name }}: {{ tweet.text }}</span>
+                    </div>
+                  {% endfor %}
                 {% endif %}
                 </blockquote>
               </div>
