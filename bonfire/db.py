@@ -643,9 +643,8 @@ def get_user_weights(universe, user_ids):
         index=universe, doc_type=USER_DOCUMENT_TYPE)['docs']
     users = filter(lambda u: u['found'], res)
 
-    normalize_weight = lambda weight: math.log(weight*10) + 1
     user_weights = dict([
-        (user['_source']['id'], normalize_weight(user['_source']['weight']))
+        (user['_source']['id'], user['_source']['weight'])
         for user in users])
     return user_weights
 
@@ -661,24 +660,34 @@ def score_link(link, user_weights, time_decay=True, hours=24):
     """
     score = 0.0
     score_explanation = []
+    convert_weight_to_score = lambda weight: math.log(weight*10 + 1)
+
     for tweeter in link['tweeters']['buckets']:
         # if they aren't in user_weights, they're no longer in the universe
-        tweeter_influence = user_weights.get(tweeter['key'], 0.0)
+        user_weight = user_weights.get(tweeter['key'], 0.0)
+        tweeter_influence = convert_weight_to_score(user_weight)
         score += tweeter_influence
         score_explanation.append(
-            'citizen %s with influence %.3f raises score to %.3f' % \
-            (tweeter['key'], tweeter_influence, score))
+            'citizen %s with weight %.2f raises score %.2f to %.2f' % \
+            (tweeter['key'], user_weight, tweeter_influence, score))
     if time_decay:
-        score_factor = lambda hrs_since: 1 - math.log(hrs_since + 1) / hours
+        # The amount to decay the original score by every hour
+        # Longer-range searches mean less hourly decay
+        DECAY_FACTOR = 1.0 - (1 / float(hours))
 
         first_tweeted = link['first_tweet']['hits']['hits'][0]['sort'][0]
-        hours_since = get_since_now(first_tweeted, 
-            time_type='hour', stringify=False)[0]
+        minutes_since = get_since_now(first_tweeted, 
+            time_type='minute', stringify=False)[0]
+        hours_since = minutes_since / 60
+
         orig_score = score
-        score *= score_factor(hours_since)
+        velocity = score / (minutes_since + 1)
+        for hour in range(hours_since):
+            score *= DECAY_FACTOR
+
         score_explanation.append(
-            'decay for %d hours drops score to %.3f (%.3f of original)' %\
-            (hours_since, score, score/orig_score))
+            'decay for %d hours drops score to %.2f (%.2f of original). Velocity of %.2f' %\
+            (hours_since, score, score/orig_score, velocity))
     return score, score_explanation
 
 
@@ -752,8 +761,31 @@ def get_items(universe, quantity=20, hours=24,
     res = es(universe).search(index=universe, doc_type=TWEET_DOCUMENT_TYPE,
         body=body, size=0)
     links = res['aggregations']['recent_tweets'][CONTENT_DOCUMENT_TYPE]['buckets']
+    # There's no content in the given time frame
     if not links:
-        # There's no content in the given time frame
+        return []
+    # Do another filter query to figure out which of these links were tweeted before
+    # the given time range.
+    body2 = {
+        'filter': {
+            'and': [{
+                'terms': {
+                    'content_url': [link['key'] for link in links]
+                    }
+                }, {
+                'range': {
+                    'created': {
+                        'lte': start
+                    }
+                }
+            }]
+        }
+    }
+    res2 = es(universe).search(index=universe, doc_type=TWEET_DOCUMENT_TYPE,
+        body=body2, size=1000)
+    outside_of_range = set([h['_source']['content_url'] for h in res2['hits']['hits']])
+    links = filter(lambda link: link['key'] not in outside_of_range, links)
+    if not links:
         return []
 
     # Score each link based on its tweeters' relative influences, and time since
