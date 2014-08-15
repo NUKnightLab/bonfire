@@ -25,7 +25,7 @@ def stream_client(universe):
 
 
 def tweet_link(universe, link):
-    via = ' via @%s' % link['tweet']['user_screen_name']
+    via = ' via @%s' % link['tweets'][0]['user_screen_name']
     text_limit = 140 - 23 - len(via)
     status = text[:text_limit] + ' ' + link['url'] + via
     client(universe).api.statuses.update.post(status=status)

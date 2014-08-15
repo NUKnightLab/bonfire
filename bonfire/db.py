@@ -63,7 +63,7 @@ TOP_CONTENT_MAPPING = {
             'type': 'string',
             'index': 'no'
         },
-        'tweet': {
+        'tweets': {
             'properties': {
                 'created': {
                     'type': 'date',
@@ -361,6 +361,8 @@ def get_top_link(universe, hours=4, quantity=5):
         return None
     score_stats = get_score_stats(universe, hours=hours)
     # Treat a link as a top link if it's > 2 standard devs above the average
+    if score_stats['avg'] is None:
+        return None
     cutoff = score_stats['avg'] + (2 * score_stats['std_deviation'])
     link_is_already_top = lambda link: es(universe).exists(
         index=TOP_CONTENT_INDEX, 
@@ -386,7 +388,7 @@ def get_recent_top_links(universe, quantity=20):
     """Get the most recently added top links in the given universe."""
     body = {
         'sort': [{
-            'tweet.created': {
+            'tweets.created': {
                 'order': 'desc'
             }
         }]
@@ -601,16 +603,17 @@ def search_items(universe, term, quantity=100):
     formatted_results = []
     for index, hit in enumerate(res):
         result = hit['_source']
+        if not 'tweets' in result:
+            result['tweets'] = []
         if hit['_type'] == CONTENT_DOCUMENT_TYPE:
             matching_tweets = filter(
                 lambda r: 'content_url' in r['_source'] and \
                           r['_source']['content_url'] == result['url'],
                 res[index+1:])
             if matching_tweets:
-                for tweet in matching_tweets:
+                for tweet in matching_tweets[:3]:
                     popped_tweet = res.pop(res.index(tweet))
-                    if not result.get('tweet'):
-                        result['tweet'] = popped_tweet['_source']
+                    result['tweets'].append(popped_tweet['_source'])
         else:
             try:
                 matching_content = filter(
@@ -621,16 +624,16 @@ def search_items(universe, term, quantity=100):
                 result = {
                     'type': 'tweet',
                     'url': result['content_url'],
-                    'tweet': result
+                    'tweets': [result]
                     }
             else:
                 tweet = result
                 result = res.pop(res.index(matching_content))['_source']
                 result['type'] = 'content'
-                result['tweet'] = tweet
+                result['tweets'] = [tweet]
         result['rank'] = index + 1
-        if 'tweet' in result:
-            result['first_tweeted'] = get_since_now(result['tweet']['created'])
+        if result['tweets']:
+            result['first_tweeted'] = get_since_now(result['tweets'][0]['created'])
         formatted_results.append(result)
 
     return formatted_results
@@ -675,7 +678,7 @@ def score_link(link, user_weights, time_decay=True, hours=24):
         # Longer-range searches mean less hourly decay
         DECAY_FACTOR = 1.0 - (1 / float(hours))
 
-        first_tweeted = link['first_tweet']['hits']['hits'][0]['sort'][0]
+        first_tweeted = link['first_tweets']['hits']['hits'][0]['sort'][0]
         minutes_since = get_since_now(first_tweeted, 
             time_type='minute', stringify=False)[0]
         hours_since = minutes_since / 60
@@ -742,9 +745,9 @@ def get_items(universe, quantity=20, hours=24,
                                     'size': 1000
                                 }
                             },
-                            'first_tweet': {
+                            'first_tweets': {
                                 'top_hits': {
-                                    'size': 1,
+                                    'size': 3,
                                     'sort': [{
                                         'created': {
                                             'order': 'asc'
@@ -817,9 +820,9 @@ def get_items(universe, quantity=20, hours=24,
         link['score'] = link_match['score']
         link['score_explanation'] = link_match['score_explanation']
         
-        tweet = link_match['first_tweet']['hits']['hits'][0]
-        link['first_tweeted'] = get_since_now(tweet['sort'][0])
-        link['tweet'] = tweet['_source']
+        tweets = link_match['first_tweets']['hits']['hits']
+        link['first_tweeted'] = get_since_now(tweets[0]['sort'][0])
+        link['tweets'] = [tweet['_source'] for tweet in tweets]
         top_links.append(link)
     return top_links
 
