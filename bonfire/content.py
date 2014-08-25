@@ -89,16 +89,6 @@ def extract(url, html=None):
     else:
         f = DefaultFetcher(url)
     img, img_h, img_w = f.get_image()
-    print 'FETCHER', f
-    print 'CANONICAL', f.get_canonical_url()
-    print 'TITLE', f.get_title()
-    print 'DESCR', f.get_description()
-    print 'TEXT', f.get_text()
-    print 'TWITTER PLAYER', f.get_twitter_player()
-    print 'FAVICON', f.get_favicon()
-    print 'TAGS', f.get_tags()
-    print 'METADATA', f.get_metadata()
-    print 'TWITTER CREATOR', f.get_twitter_creator()
     result = {
         'url': f.get_canonical_url() or url.rstrip('/'),
         'provider': f.get_provider() or '',
@@ -268,12 +258,9 @@ class DefaultFetcher(BaseFetcher):
         return self.extractor.metadata
 
     def get_title(self):
-        print 'GETTING TITLE'
         title = self.extractor.title
-        print 'TITLE', title
         if not title:
             title = super(DefaultFetcher, self).get_title()
-        print 'TITLE', title
         return title
 
     def get_text(self):

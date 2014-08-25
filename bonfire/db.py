@@ -765,7 +765,6 @@ def get_items(universe, quantity=20, hours=24,
     }
     res = es(universe).search(index=universe, doc_type=TWEET_DOCUMENT_TYPE,
         body=body, size=20)
-    print res['aggregations']
     links = res['aggregations']['recent_tweets'][CONTENT_DOCUMENT_TYPE]['buckets']
     # There's no content in the given time frame
     if not links:

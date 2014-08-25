@@ -120,11 +120,8 @@ class ArticleExtractor(object):
             if ':' not in key:
                 data[key] = value
                 continue
-            print 'DATA', data
             key = key.split(':')
-            print 'KEY', key
             ref = data[key.pop(0)]
-            print 'REF', ref
             for idx, part in enumerate(key):
                 if idx == len(key) - 1:
                     ref[part] = value
@@ -187,7 +184,6 @@ class ArticleExtractor(object):
     @property
     def title(self):
         if self._title is None:
-            print 'TITLE IS NONE'
             parent = self.article_node.parent
             if parent is None:
                 parent = self.article_node
@@ -197,7 +193,6 @@ class ArticleExtractor(object):
                     self._title =  clean_whitespace(headers[0].get_text())
                     break
         if self._title is None:
-            print 'TITLE IS STILL NONE'
             headers = self.doc.find_all(HEADER_NODE_TYPES)
             if len(headers) > 0:
                 self._title = clean_whitespace(headers[0].get_text())
