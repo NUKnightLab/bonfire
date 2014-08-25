@@ -1,4 +1,5 @@
 from __future__ import division
+from collections import defaultdict
 import urllib2
 import re
 import requests
@@ -83,7 +84,7 @@ class ArticleExtractor(object):
         self._doc = None
         self._title = None
         self._author = None
-
+        self._meta = None
 
     def fetch(self, url):
         return requests.get(url).text
@@ -103,6 +104,45 @@ class ArticleExtractor(object):
         if self._doc is None:
             self._doc = BeautifulSoup(self.html)
         return self._doc
+
+    def _extract_metadata(self):
+        """Mostly lifted from Newspaper:
+        https://github.com/codelucas/newspaper/blob/25daa2b67940053afdff9b5db12ef301141d8990/newspaper/extractors.py"""
+        data = defaultdict(dict)
+        for prop in self.doc.find_all('meta'):
+            key = prop.get('property') or prop.get('name')
+            value = prop.get('content') or prop.get('value')
+            if not key or not value:
+                continue
+            key, value = key.strip(), value.strip()
+            if value.isdigit():
+                value = int(value)
+            if ':' not in key:
+                data[key] = value
+                continue
+            print 'DATA', data
+            key = key.split(':')
+            print 'KEY', key
+            ref = data[key.pop(0)]
+            print 'REF', ref
+            for idx, part in enumerate(key):
+                if idx == len(key) - 1:
+                    ref[part] = value
+                    break
+                if not ref.get(part):
+                    ref[part] = dict()
+                elif isinstance(ref.get(part), basestring):
+                    # Not clear what to do in this scenario,
+                    # it's not always a URL, but an ID of some sort
+                    ref[part] = {'identifier': ref[part]}
+                ref = ref[part]
+        return data
+
+    @property
+    def metadata(self):
+        if self._meta is None:
+            self._meta = self._extract_metadata()
+        return self._meta
 
     @property
     def article_node(self):
@@ -124,7 +164,11 @@ class ArticleExtractor(object):
                 wc = word_count(clean_whitespace(node.get_text()))
                 scores[parent] += wc - wc * density
                 self._densities[node] = density
-            self._article_node = sorted(scores, key=scores.get, reverse=True)[0]
+            if scores:
+                self._article_node = sorted(
+                    scores, key=scores.get, reverse=True)[0]
+            else:
+                self._article_node = self.doc
         return self._article_node
 
     def get_article_text(self):
@@ -143,20 +187,26 @@ class ArticleExtractor(object):
     @property
     def title(self):
         if self._title is None:
+            print 'TITLE IS NONE'
             parent = self.article_node.parent
+            if parent is None:
+                parent = self.article_node
             for ht in HEADER_NODE_TYPES:
                 headers = parent.find_all(ht)
-                if headers:
+                if len(headers) > 0:
                     self._title =  clean_whitespace(headers[0].get_text())
                     break
         if self._title is None:
+            print 'TITLE IS STILL NONE'
             headers = self.doc.find_all(HEADER_NODE_TYPES)
-            if headers:
+            if len(headers) > 0:
                 self._title = clean_whitespace(headers[0].get_text())
         return self._title
 
 
     def _author_helper(self, base_node):
+        if base_node is None:
+            base_node = self.doc
         if self._author is None:
             parent = base_node
             for i, child in enumerate(parent.descendants):

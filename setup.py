@@ -17,6 +17,8 @@ setup(
         #'newspaper',
         'birdy',
         'elasticsearch',
+        'beautifulsoup4',
+        'delorean',
     ],
     data_files=[(expanduser('~'), ['bonfire.cfg'])],
     entry_points="""
