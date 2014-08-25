@@ -7,7 +7,6 @@ from bonfire.db import get_universe_tweets, get_items, search_items, get_recent_
 from bonfire.dates import dateify_string, stringify_date, now, apply_offset
 
 app = Flask(__name__)
-app.config['PROPAGATE_EXCEPTIONS'] = True
 
 def clean_params(params):
     # Add tz info so the date parser works (apply the offset later)

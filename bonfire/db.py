@@ -254,13 +254,13 @@ def cleanup(universe, days=30):
         })
     old_urls_ids = get_all_docs(universe,
         index=URL_CACHE_INDEX,
-        doc_type=URL_CACHE_DOCUMENT_TYPE,
+        doc_type=CACHED_URL_DOCUMENT_TYPE,
         body=body)
     for url in old_urls_ids:
         actions.append({
             '_op_type': 'delete',
             '_index': URL_CACHE_INDEX,
-            '_type': URL_CACHE_DOCUMENT_TYPE,
+            '_type': CACHED_URL_DOCUMENT_TYPE,
             '_id': url
         })
 
