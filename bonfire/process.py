@@ -104,11 +104,13 @@ def process_rawtweet(universe, raw_tweet, session=None):
             except RuntimeError as e:
                 # Not sure why this recursion error is happening
                 if e.message == 'maximum recursion depth exceeded':
+                    response.connection.close()
                     continue
                 else:
-                    raise e
+                    logger().info("Failed to process url %s due to %s, message %s" % (
+                        url, e, e.message))
+                    continue
             except Exception as e:
-                raise e
                 logger().info("Failed to process url %s due to %s, message %s" % (
                     url, e, e.message))
                 response.connection.close()
