@@ -2,7 +2,7 @@ import logging
 import time
 from collections import deque
 import requests
-from elasticsearch.exceptions import ConnectionError
+from elasticsearch.exceptions import ConnectionError, TransportError
 from .db import build_universe_mappings, next_unprocessed_tweet, \
                 save_tweet, save_content, get_cached_url, set_cached_url
 from .content import extract
@@ -66,8 +66,10 @@ def process_universe_rawtweets(universe, build_mappings=True):
                 logger().debug('No new tweet. Waiting.')
                 # Wait for a new tweet
                 time.sleep(5)
-        except ConnectionError as err:
-            logger().warn('Connection failed: %s %s' % (err, err.message))
+        except (ConnectionError, TransportError) as err:
+            logger().warn(
+                "Processor's connection to Elasticsearch failed: %s %s. Retrying." % 
+                (type(err), err.message))
             time.sleep(5)
             break
     session.close()

@@ -1,6 +1,6 @@
 import time
 import logging
-from elasticsearch.exceptions import ConnectionError
+from elasticsearch.exceptions import ConnectionError, TransportError
 from birdy.twitter import UserClient, StreamClient
 from .config import get_twitter_keys
 from .db import get_user_ids, enqueue_tweet
@@ -62,7 +62,9 @@ def collect_universe_tweets(universe):
                     and tweet['user']['id_str'] in users:
                 logger().debug('Enqueuing new tweet %s' % tweet['id_str'])
                 enqueue_tweet(universe, tweet)
-    except ConnectionError as err:
-        logger().info("Collector's connection to Elasticsearch failed: %s. Retrying." % err.message)
+    except (ConnectionError, TransportError) as err:
+        logger().warn(
+            "Collector's connection to Elasticsearch failed: %s %s. Retrying." % 
+            (type(err), err.message))
         time.sleep(5)
         return collect_universe_tweets(universe)
