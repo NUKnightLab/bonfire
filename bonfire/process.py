@@ -17,10 +17,8 @@ def logger():
 def create_session():
     """Create a requests session optimized for many connections."""
     session = requests.Session()
-
     session.headers['User-Agent'] = USER_AGENT
     session.max_redirects = 5
-
     http_adapter = requests.adapters.HTTPAdapter()
     https_adapter = requests.adapters.HTTPAdapter()
     http_adapter.pool_connections = 20
@@ -84,7 +82,6 @@ def process_rawtweet(universe, raw_tweet, session=None):
     """
     if session is None:
         session = create_session()
-
     # First extract content
     urls = [u['expanded_url'] for u in raw_tweet['_source']['entities']['urls']]
     for url in urls:
@@ -100,6 +97,21 @@ def process_rawtweet(universe, raw_tweet, session=None):
                 continue
             try:
                 article = extract(response.url, html=response.text)
+            except requests.exceptions.Timeout:
+                continue
+            except requests.exceptions.TooManyRedirects:
+                continue
+            except requests.exceptions.ConnectionError:
+                continue
+            except RuntimeError as e:
+                # Not sure why this recursion error is happening
+                if e.message == 'maximum recursion depth exceeded':
+                    response.connection.close()
+                    continue
+                else:
+                    logger().info("Failed to process url %s due to %s, message %s" % (
+                        url, e, e.message))
+                    continue
             except Exception as e:
                 logger().info("Failed to process url %s due to %s, message %s" % (
                     url, e, e.message))

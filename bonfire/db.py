@@ -694,6 +694,8 @@ def score_link(link, user_weights, time_decay=True, hours=24):
     return score, score_explanation
 
 
+import pprint
+pp = pprint.PrettyPrinter()
 def get_items(universe, quantity=20, hours=24, 
               start=None, end=None, time_decay=True):
     """
@@ -762,7 +764,7 @@ def get_items(universe, quantity=20, hours=24,
         }
     }
     res = es(universe).search(index=universe, doc_type=TWEET_DOCUMENT_TYPE,
-        body=body, size=0)
+        body=body, size=20)
     links = res['aggregations']['recent_tweets'][CONTENT_DOCUMENT_TYPE]['buckets']
     # There's no content in the given time frame
     if not links:
