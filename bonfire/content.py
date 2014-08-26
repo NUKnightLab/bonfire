@@ -82,10 +82,6 @@ def extract(url, html=None):
     # Set the language for now otherwise we get weird bugs
     article = Article(url, language='en')
 
-    # Check for any flags that newspaper handles poorly.
-    if html is None and any(item in url for item in NEWSPAPER_FLAGS):
-        html = requests.get(url, timeout=7).text
-
     if html is None:
         article.download()
     else:

@@ -1,4 +1,6 @@
+import time
 import logging
+from elasticsearch.exceptions import ConnectionError
 from birdy.twitter import UserClient, StreamClient
 from .config import get_twitter_keys
 from .db import get_user_ids, enqueue_tweet
@@ -51,11 +53,16 @@ def collect_universe_tweets(universe):
     Limited to the top 5000 users by API limitation."""
     users = set(get_user_ids(universe, size=5000))
     client = stream_client(universe)
-    logger().info('Connecting to universe %s with users %s' % (universe, ', '.join(users)))
-    response = client.stream.statuses.filter.post(follow=','.join(users))
-    for tweet in response.stream():
-        if 'entities' in tweet \
-                and tweet['entities']['urls'] \
-                and tweet['user']['id_str'] in users:
-            logger().debug('Enqueuing new tweet %s' % tweet['id_str'])
-            enqueue_tweet(universe, tweet)
+    logger().info('Connecting to universe %s with %d users' % (universe, len(users)))
+    try:
+        response = client.stream.statuses.filter.post(follow=','.join(users))
+        for tweet in response.stream():
+            if 'entities' in tweet \
+                    and tweet['entities']['urls'] \
+                    and tweet['user']['id_str'] in users:
+                logger().debug('Enqueuing new tweet %s' % tweet['id_str'])
+                enqueue_tweet(universe, tweet)
+    except ConnectionError as err:
+        logger().info("Collector's connection to Elasticsearch failed: %s. Retrying." % err.message)
+        time.sleep(5)
+        return collect_universe_tweets(universe)
