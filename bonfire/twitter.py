@@ -51,10 +51,10 @@ def get_friends(universe, user_id):
 def collect_universe_tweets(universe):
     """Connects to the streaming API and enqueues tweets from universe users.
     Limited to the top 5000 users by API limitation."""
-    users = set(get_user_ids(universe, size=5000))
     client = stream_client(universe)
-    logger().info('Connecting to universe %s with %d users' % (universe, len(users)))
     try:
+        users = set(get_user_ids(universe, size=5000))
+        logger().info('Connecting to universe %s with %d users' % (universe, len(users)))
         response = client.stream.statuses.filter.post(follow=','.join(users))
         for tweet in response.stream():
             if 'entities' in tweet \
