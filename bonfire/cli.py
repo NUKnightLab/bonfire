@@ -9,6 +9,7 @@ from .config import (
     get_universes,
     logging_config,
     get_universes )
+from .db import get_latest_tweet, get_latest_raw_tweet
 from .universe import build_universe, cache_queries, cleanup_universe
 from .twitter import collect_universe_tweets
 from .process import process_universe_rawtweets
@@ -116,10 +117,36 @@ def cleanup(universe, days):
 
 
 @click.command()
+@click.argument('universe', default=DEFAULT_UNIVERSE)
+def lasttweet(universe):
+    """Show the latest processed tweet."""
+    t = get_latest_tweet(universe)    
+    print '\n@%s' % t['user_screen_name']
+    print t['text']
+    print t['created']
+    print ''
+
+
+@click.command()
+@click.argument('universe', default=DEFAULT_UNIVERSE)
+def lastrawtweet(universe):
+    """Show the latest unprocessed queued tweet."""
+    try:
+        t = get_latest_raw_tweet(universe)    
+        print '\n@%s' % t['user']['screen_name']
+        print t['text']
+        print t['created_at']
+        print ''
+    except IndexError:
+        print '\nRaw Tweet Queue Is Empty\n'
+
+
+@click.command()
 @click.pass_context
 def help(ctx):
     """Show help."""
     print(ctx.parent.get_help())
+
 
 
 cli.add_command(config)
@@ -129,4 +156,6 @@ cli.add_command(collect)
 cli.add_command(process)
 cli.add_command(cache)
 cli.add_command(cleanup)
+cli.add_command(lasttweet)
+cli.add_command(lastrawtweet)
 cli.add_command(help)

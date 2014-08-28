@@ -129,7 +129,11 @@ UNPROCESSED_TWEET_MAPPING = {
         'id': {
             'type': 'string',
             'index': 'not_analyzed'
-        }
+        },
+        'created_at': {
+            'type': 'date',
+            'format': ELASTICSEARCH_TIME_FORMAT
+        },
     }
 }
 
@@ -849,3 +853,25 @@ def get_top_providers(universe, size=2000):
         size=0)
     return [i['key'] for i in res['aggregations']['providers']['buckets']]
 
+
+def get_latest_tweet(universe):
+    body = {
+        'sort': { 'created': { 'order': 'desc' }}
+    }
+    res = es(universe).search(
+        index=universe,
+        doc_type=TWEET_DOCUMENT_TYPE,
+        body = body)
+    return res['hits']['hits'][0]['_source']
+        
+
+def get_latest_raw_tweet(universe):
+    body = {
+        'sort': { 'created_at': { 'order': 'desc' }}
+    }
+    res = es(universe).search(
+        index=universe,
+        doc_type=UNPROCESSED_TWEET_DOCUMENT_TYPE,
+        body = body)
+    return res['hits']['hits'][0]['_source']
+        
