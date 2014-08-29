@@ -202,8 +202,8 @@ class BaseFetcher(object):
         return [img, height, width]
 
     def get_top_image(self):
-        """A shim to help support using Newspaper's top_image."""
-        return None
+        """Get the top article image."""
+        raise NotImplementedError
 
     def get_image(self):
         """
@@ -214,10 +214,10 @@ class BaseFetcher(object):
         """
         result = self.get_facebook_image() or \
                  self.get_twitter_image()
-        if not result:
+        if not result[0]:
             result = [self.get_top_image(), 0, 0]
         if not result[0] or isinstance(result[0], int):
-            return ["", 0, 0]
+            return ['', 0, 0]
         result[0] = self._add_domain(result[0])
         if not all(result[1:]):
             dimensions = self.get_image_dimensions(result[0])
@@ -271,6 +271,9 @@ class DefaultFetcher(BaseFetcher):
         """Retrieve favicon url from article tags or from
         `<http://g.etfv.co>`_"""
         return None
+
+    def get_top_image(self):
+        return self.extractor.get_top_image()
 
     def get_image_dimensions(self, img_url):
         return (None, None)

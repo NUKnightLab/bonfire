@@ -85,6 +85,7 @@ class ArticleExtractor(object):
         self._title = None
         self._author = None
         self._meta = None
+        self._images = None
 
     def fetch(self, url):
         return requests.get(url).text
@@ -233,6 +234,20 @@ class ArticleExtractor(object):
         if self._author is None:
             self._author_helper(self.doc)
         return self._author
+
+    @property
+    def images(self):
+        if self._images is None:
+            self._images = [img.attrs['src'] for img in
+                self.article_node.find_all('img') if img.attrs.get('src')]
+            if len(self._images) == 0:
+                self._images = [img.attrs['src'] for img in
+                    self.doc.find_all('img') if img.attrs.get('src')]
+        return self._images
+
+    def get_top_image(self):
+        """Return the first of the article images."""
+        return self.images[0] if self.images else ''
 
 
 if __name__=='__main__':
