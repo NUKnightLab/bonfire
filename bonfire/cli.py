@@ -9,7 +9,12 @@ from .config import (
     get_universes,
     logging_config,
     get_universes )
-from .db import get_latest_tweet, get_latest_raw_tweet
+from .db import (
+    get_latest_tweet,
+    get_latest_raw_tweet,
+    delete_content_by_url,
+    delete_tweets_by_url,
+    build_universe_mappings )
 from .universe import build_universe, cache_queries, cleanup_universe
 from .twitter import collect_universe_tweets
 from .process import process_universe_rawtweets
@@ -140,6 +145,21 @@ def lastrawtweet(universe):
     except IndexError:
         print '\nRaw Tweet Queue Is Empty\n'
 
+@click.command()
+@click.argument('universe')
+@click.argument('url')
+def delete(universe, url):
+    """Delete universe content and tweets specified by URL."""
+    delete_content_by_url(universe, url)
+    delete_tweets_by_url(universe, url)
+
+
+@click.command()
+@click.argument('universe', default=DEFAULT_UNIVERSE)
+def remap(universe):
+    """Delete universe data and rebuild mappings."""
+    build_universe_mappings(universe, True)
+
 
 @click.command()
 @click.pass_context
@@ -158,4 +178,6 @@ cli.add_command(cache)
 cli.add_command(cleanup)
 cli.add_command(lasttweet)
 cli.add_command(lastrawtweet)
+cli.add_command(delete)
+cli.add_command(remap)
 cli.add_command(help)

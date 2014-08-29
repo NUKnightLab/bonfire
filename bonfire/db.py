@@ -148,9 +148,11 @@ def es(universe):
     return _es_connections[universe]
 
 
-def build_universe_mappings(universe):
+def build_universe_mappings(universe, rebuild=False):
     """Create and map the universe."""
-
+    # TODO: Can we rebuild without losing our data by using aliases and
+    # re-indexing? See here:
+    # http://www.elasticsearch.org/blog/changing-mapping-with-zero-downtime/
     # Keys are the index names. 
     # Values are key/value pairs of the doc types and doc mappings.
     all_indices = {
@@ -170,11 +172,13 @@ def build_universe_mappings(universe):
             TOP_CONTENT_DOCUMENT_TYPE: TOP_CONTENT_MAPPING
         }
     }
-
     for index_name, index_mapping in all_indices.items():
         if not es(universe).indices.exists(index_name):
             es(universe).indices.create(index=index_name)
         for doc_type, doc_mapping in index_mapping.items():
+            if rebuild:
+                es(universe).indices.delete_mapping(
+                    index=index_name, doc_type=doc_type) 
             es(universe).indices.put_mapping(
                 doc_type, doc_mapping, index=index_name)
 
@@ -414,6 +418,19 @@ def delete_user(universe, user_id):
     """Delete a user from the universe index by their id."""
     es(universe).delete(index=universe, 
         doc_type=USER_DOCUMENT_TYPE, id=user_id)
+
+
+def delete_content_by_url(universe, url):
+    """Delete the content specified by url."""
+    es(universe).delete(index=universe,
+        doc_type=CONTENT_DOCUMENT_TYPE, id=url)
+
+
+def delete_tweets_by_url(universe, url):
+    """Delete tweets specified by url."""
+    es(universe).delete_by_query(index=universe,
+        doc_type=TWEET_DOCUMENT_TYPE,
+        body={'query': { 'term': { 'content_url': url }}})
 
 
 def save_user(universe, user):
@@ -874,4 +891,5 @@ def get_latest_raw_tweet(universe):
         doc_type=UNPROCESSED_TWEET_DOCUMENT_TYPE,
         body = body)
     return res['hits']['hits'][0]['_source']
-        
+       
+
