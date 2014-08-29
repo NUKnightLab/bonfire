@@ -10,6 +10,7 @@ ATTRIBUTION_REX = re.compile('^\s*[Bb][Yy]\s+(\w+\.? ?){1,4}\.?\s*$')
 WORD = re.compile('\w+')
 DEFAULT_CONTENT_NODE_TYPES = ['p']
 HEADER_NODE_TYPES = ['h1', 'h2', 'h3']
+USER_AGENT = 'Mozilla/5.0 (iPad; U; CPU OS 3_2_1 like Mac OS X; en-us) AppleWebKit/531.21.10 (KHTML, like Gecko) Mobile/7B405'
 
 
 def content_nodes(elem, node_types=None):
@@ -88,7 +89,13 @@ class ArticleExtractor(object):
         self._images = None
 
     def fetch(self, url):
-        return requests.get(url).text
+        headers = {
+            'User-Agent': USER_AGENT
+        }
+        r = requests.get(url, headers=headers)
+        if r.status_code >= 400:
+            raise requests.exceptions.HTTPError(r.status_code)
+        return r.text
 
     @property
     def url(self):

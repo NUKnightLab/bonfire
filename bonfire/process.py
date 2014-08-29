@@ -103,6 +103,8 @@ def process_rawtweet(universe, raw_tweet, session=None):
                 continue
             except requests.exceptions.ConnectionError:
                 continue
+            except requests.exceptions.HTTPError:
+                continue
             except RuntimeError as e:
                 # Not sure why this recursion error is happening
                 if e.message == 'maximum recursion depth exceeded':
