@@ -81,9 +81,9 @@ def extract(url, html=None):
     :arg html: if provided, skip downloading and go straight to parsing html.
     """
     if newspaper_article is not None:
-        f = NewspaperFetcher(url)
+        f = NewspaperFetcher(url, html=html)
     else:
-        f = DefaultFetcher(url)
+        f = DefaultFetcher(url, html=html)
     img, img_h, img_w = f.get_image()
     result = {
         'url': f.get_canonical_url() or url.rstrip('/'),
