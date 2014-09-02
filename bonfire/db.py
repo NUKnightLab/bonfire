@@ -8,144 +8,41 @@ from elasticsearch.exceptions import (
     ConflictError)
 from elasticsearch.helpers import bulk
 from .config import get_elasticsearch_hosts
-from .dates import ELASTICSEARCH_TIME_FORMAT, now, get_since_now, \
-                   get_query_dates
+from .dates import now, get_since_now, get_query_dates
 
 def logger():
     return  logging.getLogger(__name__)
 
 RESULTS_CACHE_INDEX = 'bonfire_results_cache'
 RESULTS_CACHE_DOCUMENT_TYPE = 'results'
-RESULTS_CACHE_MAPPING = {
-    'properties': {
-        'cached_at': {
-            'type': 'date',
-            'format': ELASTICSEARCH_TIME_FORMAT
-        },
-        'hours_since': {
-            'type': 'integer',
-        },
-        'results': {
-            'properties': {
-                '_default_': {
-                    'type': 'string',
-                    'index': 'no'
-                },
-                'score': {
-                    'type': 'float',
-                    'index': 'not_analyzed'
-                }
-            }
-        }
-    }
-}
-
 URL_CACHE_INDEX = 'bonfire_url_cache'
 CACHED_URL_DOCUMENT_TYPE = 'url'
-CACHED_URL_MAPPING = {
-    'properties': {
-        'url': {
-            'type': 'string',
-            'index': 'not_analyzed'
-        },
-        'resolved': {
-            'type': 'string',
-            'index': 'not_analyzed'
-        }
-    }
-}
-
 TOP_CONTENT_INDEX = 'bonfire_top_content'
 TOP_CONTENT_DOCUMENT_TYPE = 'top_content'
-TOP_CONTENT_MAPPING = {
-    'properties': {
-        '_default_': {
-            'type': 'string',
-            'index': 'no'
-        },
-        'tweets': {
-            'properties': {
-                'created': {
-                    'type': 'date',
-                    'format': ELASTICSEARCH_TIME_FORMAT
-                }
-            }
-        }
-    }
-}
-
 USER_DOCUMENT_TYPE = 'user'
-USER_MAPPING = {
-    'properties': {
-        'id': {
-            'type': 'string',
-            'index': 'not_analyzed'
-        },
-        'weight': {
-            'type': 'float',
-        }
-    }
-}
-
 CONTENT_DOCUMENT_TYPE = 'content'
-CONTENT_MAPPING = {
-    'properties': {
-        'url': {
-            'type': 'string',
-            'index': 'not_analyzed'
-        }
-    }
-}
-
 TWEET_DOCUMENT_TYPE = 'tweet'
-TWEET_MAPPING = {
-    'properties': {
-        'id': {
-            'type': 'string',
-            'index': 'not_analyzed'
-        },
-        'content_url': {
-            'type': 'string',
-            'index': 'not_analyzed'
-        },
-        'created': {
-            'type': 'date',
-            'format': ELASTICSEARCH_TIME_FORMAT
-        },
-        'provider': {
-            'type': 'string',
-            'index': 'not_analyzed'
-        }
-    }
-}
-
 UNPROCESSED_TWEET_DOCUMENT_TYPE = 'rawtweet'
-UNPROCESSED_TWEET_MAPPING = {
-    'properties': {
-        '_default_': {
-            'type': 'string',
-            'index': 'no'
-        },
-        'id': {
-            'type': 'string',
-            'index': 'not_analyzed'
-        },
-        'created_at': {
-            'type': 'date',
-            'format': ELASTICSEARCH_TIME_FORMAT
-        },
-    }
-}
+from .mappings import (
+    RESULTS_CACHE_MAPPING,
+    CACHED_URL_MAPPING,
+    TOP_CONTENT_MAPPING,
+    USER_MAPPING,
+    CONTENT_MAPPING,
+    TWEET_MAPPING,
+    UNPROCESSED_TWEET_MAPPING)
 
 
 _es_connections = {}
+from .elastic import ESClient
 def es(universe):
-    """Return Elasticsearch connection for the universe"""
+    """Return new-style Elasticsearch client connection for the universe"""
     global _es_connections
     if not universe in _es_connections:
-        _es_connections[universe] = Elasticsearch(
+        _es_connections[universe] = ESClient(
             hosts=get_elasticsearch_hosts(universe))
     return _es_connections[universe]
+
 
 
 def build_universe_mappings(universe, rebuild=False):
@@ -202,16 +99,14 @@ def get_all_docs(universe, index, doc_type, body={}, size=None, field='_id'):
             res = es(universe).search(index=universe, doc_type=doc_type,
                 body=body, size=chunk_size, from_=start,
                 _source=False)
-            all_results.extend(
-                [u['_id'] for u in res['hits']['hits']])
+            all_results.extend([u._id for u in res])
         else:
             res = es(universe).search(index=universe, doc_type=doc_type,
                 body=body, size=chunk_size, from_=start,
                 _source_include=[field])
-            all_results.extend(
-                [u['_source'][field] for u in res['hits']['hits']])
+            all_results.extend([u[field] for u in res])
         if size is None:
-            size = res['hits']['total']
+            size = res.total_hits
         start += chunk_size
         if start >= size:
             break
@@ -357,7 +252,7 @@ def get_score_stats(universe, hours=4):
         index=RESULTS_CACHE_INDEX, 
         doc_type=RESULTS_CACHE_DOCUMENT_TYPE, 
         body=body)
-    return res['aggregations']['fresh_queries']['scores']
+    return res.aggregations['fresh_queries']['scores']
 
 
 def get_top_link(universe, hours=4, quantity=5):
@@ -401,9 +296,8 @@ def get_recent_top_links(universe, quantity=20):
             }
         }]
     }
-    res = es(universe).search(index=TOP_CONTENT_INDEX, 
+    return es(universe).search(index=TOP_CONTENT_INDEX, 
         doc_type=TOP_CONTENT_DOCUMENT_TYPE, body=body, size=quantity)
-    return [r['_source'] for r in res['hits']['hits']]
 
 
 def save_content(universe, content):
@@ -484,7 +378,7 @@ def next_unprocessed_tweet(universe, not_ids=None):
         if not_ids is None:
             result = es(universe).search(index=universe,
                 doc_type=UNPROCESSED_TWEET_DOCUMENT_TYPE,
-                size=1, version=True)['hits']['hits'][0]
+                size=1, version=True).next()
         else:
             body = {
                 'query': {
@@ -499,29 +393,29 @@ def next_unprocessed_tweet(universe, not_ids=None):
             }
             result = es(universe).search(index=universe,
                 doc_type=UNPROCESSED_TWEET_DOCUMENT_TYPE,
-                size=1, version=True, body=body)['hits']['hits'][0]
-    except IndexError:
+                size=1, version=True, body=body).next()
+    except StopIteration:
         # There are no unprocessed tweets in the universe
         return None
     try:
         es(universe).delete(index=universe,
             doc_type=UNPROCESSED_TWEET_DOCUMENT_TYPE,
-            id=result['_id'], version=result['_version'])
+            id=result._id, version=result._version)
     except NotFoundError:
         # Something's wrong. Ignore it for now.
-        logger().info('Could not find raw tweet %s.' % result['_id'])
+        logger().info('Could not find raw tweet %s.' % result._id)
         return next_unprocessed_tweet(universe, not_ids=not_ids)
     except ConflictError:
         # Could happen if another processor grabbed and deleted this tweet,
         # or state is otherwise inconsistent.
         logger().info('Version conflict. Skipping raw tweet ID: %s' % (
-            result['_id']))
+            result._id))
         if not_ids is None:
-            not_ids = [result['_id']]
+            not_ids = [result._id]
         else:
-            not_ids.append(result['_id'])
+            not_ids.append(result._id)
         return next_unprocessed_tweet(universe, not_ids=not_ids)
-    logger().debug('Dequeued raw tweet: %s' % result['_id'])
+    logger().debug('Dequeued raw tweet: %s' % result._id)
     return result
 
 
@@ -568,9 +462,8 @@ def get_universe_tweets(universe, query=None, quantity=20,
             }
         }
     }
-    res = es(universe).search(index=universe, doc_type=TWEET_DOCUMENT_TYPE,
+    return es(universe).search(index=universe, doc_type=TWEET_DOCUMENT_TYPE,
         body=body, size=quantity)
-    return [tweet['_source'] for tweet in res['hits']['hits']]
 
 
 def search_content(universe, query, size=100):
@@ -592,9 +485,8 @@ def search_content(universe, query, size=100):
             'match': query
         }
     }
-    res = es(universe).search(index=universe, doc_type=CONTENT_DOCUMENT_TYPE,
+    return es(universe).search(index=universe, doc_type=CONTENT_DOCUMENT_TYPE,
         body=body, size=size)
-    return [content['_source'] for content in res['hits']['hits']]
 
 
 def search_items(universe, term, quantity=100):
@@ -619,17 +511,15 @@ def search_items(universe, term, quantity=100):
         index=universe, 
         doc_type=','.join((CONTENT_DOCUMENT_TYPE, TWEET_DOCUMENT_TYPE)), 
         body=body, 
-        size=quantity)['hits']['hits']
-
+        size=quantity)
     formatted_results = []
-    for index, hit in enumerate(res):
-        result = hit['_source']
+    for index, result in enumerate(res):
         if not 'tweets' in result:
             result['tweets'] = []
-        if hit['_type'] == CONTENT_DOCUMENT_TYPE:
+        if hit._type == CONTENT_DOCUMENT_TYPE:
             matching_tweets = filter(
-                lambda r: 'content_url' in r['_source'] and \
-                          r['_source']['content_url'] == result['url'],
+                lambda r: 'content_url' in r and \
+                          r.content_url == result.url,
                 res[index+1:])
             if matching_tweets:
                 for tweet in matching_tweets[:3]:
@@ -638,18 +528,18 @@ def search_items(universe, term, quantity=100):
         else:
             try:
                 matching_content = filter(
-                    lambda r: 'url' in r['_source'] and 
-                              r['_source']['url'] == result['content_url'],
+                    lambda r: 'url' in r and 
+                              r.url == result.content_url,
                     res[index+1:])[0]
             except IndexError:
                 result = {
                     'type': 'tweet',
-                    'url': result['content_url'],
+                    'url': result.content_url,
                     'tweets': [result]
                     }
             else:
                 tweet = result
-                result = res.pop(res.index(matching_content))['_source']
+                result = res.pop(res.index(matching_content))
                 result['type'] = 'content'
                 result['tweets'] = [tweet]
         result['rank'] = index + 1
@@ -664,12 +554,9 @@ def get_user_weights(universe, user_ids):
     """Takes a list of user ids and returns a dict 
     with their weighted influence."""
     res = es(universe).mget({'ids': list(set(user_ids))}, 
-        index=universe, doc_type=USER_DOCUMENT_TYPE)['docs']
-    users = filter(lambda u: u['found'], res)
-
-    user_weights = dict([
-        (user['_source']['id'], user['_source']['weight'])
-        for user in users])
+        index=universe, doc_type=USER_DOCUMENT_TYPE)
+    users = filter(lambda u: u._found, res)
+    user_weights = dict([ (user.id, user.weight) for user in users])
     return user_weights
 
 
@@ -710,7 +597,8 @@ def score_link(link, user_weights, time_decay=True, hours=24):
             score *= DECAY_FACTOR
 
         score_explanation.append(
-            'decay for %d hours drops score to %.2f (%.2f of original). Velocity of %.2f' %\
+            'decay for %d hours drops score to %.2f (%.2f of original). '\
+            'Velocity of %.2f' %\
             (hours_since, score, score/orig_score, velocity))
     return score, score_explanation
 
@@ -784,7 +672,7 @@ def get_items(universe, quantity=20, hours=24,
     }
     res = es(universe).search(index=universe, doc_type=TWEET_DOCUMENT_TYPE,
         body=body, size=0)
-    links = res['aggregations']['recent_tweets'][CONTENT_DOCUMENT_TYPE]['buckets']
+    links = res.aggregations['recent_tweets'][CONTENT_DOCUMENT_TYPE]['buckets']
     # There's no content in the given time frame
     if not links:
         return []
@@ -807,7 +695,7 @@ def get_items(universe, quantity=20, hours=24,
     }
     res2 = es(universe).search(index=universe, doc_type=TWEET_DOCUMENT_TYPE,
         body=body2, size=1000)
-    outside_of_range = set([h['_source']['content_url'] for h in res2['hits']['hits']])
+    outside_of_range = set([h.content_url for h in res2])
     links = filter(lambda link: link['key'] not in outside_of_range, links)
     if not links:
         return []
@@ -827,12 +715,11 @@ def get_items(universe, quantity=20, hours=24,
     top_urls = [url['key'] for url in sorted_links]
     link_res = es(universe).mget({'ids': top_urls}, 
         index=universe, doc_type=CONTENT_DOCUMENT_TYPE)
-    matching_links = filter(lambda c: c['found'], link_res['docs'])
+    matching_links = filter(lambda c: c._found, link_res)
 
     # Add some metadata, including the tweet
     top_links = []
-    for index, item in enumerate(matching_links):
-        link = item['_source']
+    for index, link in enumerate(matching_links):
         # Add the link's rank
         link['rank'] = index + 1
 
@@ -868,7 +755,7 @@ def get_top_providers(universe, size=2000):
         doc_type=CONTENT_DOCUMENT_TYPE, 
         body=body, 
         size=0)
-    return [i['key'] for i in res['aggregations']['providers']['buckets']]
+    return [i['key'] for i in res.aggregations['providers']]
 
 
 def get_latest_tweet(universe):
@@ -879,7 +766,10 @@ def get_latest_tweet(universe):
         index=universe,
         doc_type=TWEET_DOCUMENT_TYPE,
         body = body)
-    return res['hits']['hits'][0]['_source']
+    try:
+        return res.next()
+    except StopIteration:
+        return None
         
 
 def get_latest_raw_tweet(universe):
@@ -890,6 +780,9 @@ def get_latest_raw_tweet(universe):
         index=universe,
         doc_type=UNPROCESSED_TWEET_DOCUMENT_TYPE,
         body = body)
-    return res['hits']['hits'][0]['_source']
+    try:
+        return res.next()
+    except StopIteration:
+        return None
        
 

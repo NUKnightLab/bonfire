@@ -126,24 +126,27 @@ def cleanup(universe, days):
 def lasttweet(universe):
     """Show the latest processed tweet."""
     t = get_latest_tweet(universe)    
-    print '\n@%s' % t['user_screen_name']
-    print t['text']
-    print t['created']
-    print ''
+    if t is None:
+        print '\nTweet Index Is Empty\n'
+    else:
+        print '\n@%s' % t.user_screen_name
+        print t.text
+        print t.created
+        print ''
 
 
 @click.command()
 @click.argument('universe', default=DEFAULT_UNIVERSE)
 def lastrawtweet(universe):
     """Show the latest unprocessed queued tweet."""
-    try:
-        t = get_latest_raw_tweet(universe)    
-        print '\n@%s' % t['user']['screen_name']
-        print t['text']
-        print t['created_at']
-        print ''
-    except IndexError:
+    t = get_latest_raw_tweet(universe)    
+    if t is None:
         print '\nRaw Tweet Queue Is Empty\n'
+    else:
+        print '\n@%s' % t.user['screen_name']
+        print t.text
+        print t.created_at
+        print ''
 
 @click.command()
 @click.argument('universe')
