@@ -501,9 +501,10 @@ def search_items(universe, term, quantity=100):
     # Search tweets and content for the given term
     body = {
         'query': {
-            'multi_match': {
+            'query_string': {
                 'query': term,
-                'fields': ['title', 'description', 'text', 'tags']
+                'fields': ['title', 'description', 'text', 'tags'],
+                'analyzer': 'snowball'
             }
         }
     }
@@ -513,30 +514,29 @@ def search_items(universe, term, quantity=100):
         body=body, 
         size=quantity)
     formatted_results = []
+    res = [r for r in res]
     for index, result in enumerate(res):
         if not 'tweets' in result:
             result['tweets'] = []
-        if hit._type == CONTENT_DOCUMENT_TYPE:
+        if result._type == CONTENT_DOCUMENT_TYPE:
             matching_tweets = filter(
-                lambda r: 'content_url' in r and \
-                          r.content_url == result.url,
+                lambda r: 'content_url' in r and r.content_url == result.url,
                 res[index+1:])
             if matching_tweets:
                 for tweet in matching_tweets[:3]:
                     popped_tweet = res.pop(res.index(tweet))
-                    result['tweets'].append(popped_tweet['_source'])
+                    result['tweets'].append(popped_tweet)
         else:
             try:
                 matching_content = filter(
-                    lambda r: 'url' in r and 
-                              r.url == result.content_url,
+                    lambda r: 'url' in r and r.url == result.content_url,
                     res[index+1:])[0]
             except IndexError:
                 result = {
                     'type': 'tweet',
                     'url': result.content_url,
                     'tweets': [result]
-                    }
+                }
             else:
                 tweet = result
                 result = res.pop(res.index(matching_content))
@@ -544,9 +544,9 @@ def search_items(universe, term, quantity=100):
                 result['tweets'] = [tweet]
         result['rank'] = index + 1
         if result['tweets']:
-            result['first_tweeted'] = get_since_now(result['tweets'][0]['created'])
+            result['first_tweeted'] = get_since_now(
+                result['tweets'][0]['created'])
         formatted_results.append(result)
-
     return formatted_results
 
 
