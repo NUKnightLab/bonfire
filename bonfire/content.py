@@ -1,16 +1,12 @@
 import requests
-newspaper = None
+newspaper_article = None
 try:
-    from newspaper import Article
+    from newspaper import Article as newspaper_article
     from newspaper.images import fetch_image_dimension
 except ImportError:
     pass
 from urlparse import urlparse, urljoin
 from .extract import ArticleExtractor
-
-# These are url domains/excepts that newspaper's URL sanitizer handles poorly.
-# Add to these flags if you want to keep request arguments, etc.
-NEWSPAPER_FLAGS = set(('youtube.com',))
 
 # Known url shortening domains.
 # Newspaper sometimes assumes that shortened domains are canonical, so this
@@ -84,10 +80,10 @@ def extract(url, html=None):
 
     :arg html: if provided, skip downloading and go straight to parsing html.
     """
-    if newspaper is not None:
-        f = NewspaperFetcher(url)
+    if newspaper_article is not None:
+        f = NewspaperFetcher(url, html=html)
     else:
-        f = DefaultFetcher(url)
+        f = DefaultFetcher(url, html=html)
     img, img_h, img_w = f.get_image()
     result = {
         'url': f.get_canonical_url() or url.rstrip('/'),
@@ -250,9 +246,9 @@ class DefaultFetcher(BaseFetcher):
     Class to fetch article from a URL.
     """
 
-    def __init__(self, url):
+    def __init__(self, url, html=None):
         self.resolved_url = ''
-        self.extractor = ArticleExtractor(url=url)
+        self.extractor = ArticleExtractor(url=url, html=html)
 
     def get_metadata(self):
         return self.extractor.metadata
@@ -290,67 +286,66 @@ class NewspaperFetcher(BaseFetcher):
     Smartly fetches metadata from a newspaper article, and cleans the results.
     """
 
-    def __init__(self, url):
+    def __init__(self, url, html=None):
         self.resolved_url = ''
-        article = Article(url, language='en')
-        if html is None and any(item in url for item in NEWSPAPER_FLAGS):
-            html = requests.get(url, timeout=7).text
+        article = newspaper_article(url, language='en')
         if html is None:
             article.download()
         else:
             article.set_html(html)
         article.parse()
-        self.article = article
+        self.extractor = article
 
     def get_metadata(self):
-        return self.article.meta_data
+        return self.extractor.meta_data
 
     def get_canonical_link(self):
-        return self.article.canonical_link.strip()
+        return self.extractor.canonical_link.strip()
 
     def get_title(self):
         """Retrieve title from opengraph, twitter, or meta tags."""
-        tile = self.article.title.strip()
+        title = super(NewspaperFetcher, self).get_title()
         if not title:
-            return super(NewspaperFetcher, self).get_title()
+            title = self.extractor.title.strip()
+        return title
 
     def get_text(self):
         """Get the article text."""
-        return self.article.text
+        return self.extractor.text
 
     def get_description(self):
         descr = super(NewspaperFetcher, self).get_description()
         if not descr:
-            descr = self.article.summary.strip() or \
-            self.article.meta_description.strip()
+            descr = self.extractor.summary.strip() or \
+            self.extractor.meta_description.strip()
         return descr
 
     def get_favicon(self):
         """Retrieve favicon url from article tags or from
         `<http://g.etfv.co>`_"""
-        favicon_url = self.article.meta_favicon or \
+        favicon_url = self.extractor.meta_favicon or \
             'http://g.etfv.co/%s?defaulticon=none' % (
                 self.get_canonical_url())
         return self._add_domain(favicon_url)
 
     def get_top_image(self):
-        return self.article.top_image
+        return self.extractor.top_image
 
     def get_image_dimensions(self, img_url):
         return fetch_image_dimension(
-            img_url, self.article.config.browser_user_agent)
+            img_url, self.extractor.config.browser_user_agent)
 
     def get_authors(self):
         """Retrieve an author or authors. This works very sporadically."""
-        auth = ', '.join(self.article.authors)
+        auth = ', '.join(self.extractor.authors)
         if not auth:
-            auth = self.article.meta_data.get('og', {})\
+            auth = self.extractor.meta_data.get('og', {})\
             .get('article', {}).get('author', '')
         return auth
 
     def get_published(self):
         """Retrieve a published date. This almost never gets anything."""
-        pub = self.article.published_date.strip()
+        pub = self.extractor.published_date.strip()
         if not pub:
             pub = super(NewspaperFetcher, self).get_published()
         return pub
@@ -364,6 +359,6 @@ class NewspaperFetcher(BaseFetcher):
             - tags
         """
         tags = super(NewspaperFetcher, self).get_tags()
-        all_candidates = list(set(self.article.keywords + \
-            self.article.meta_keywords + list(self.article.tags) + tags))
+        all_candidates = list(set(self.extractor.keywords + \
+            self.extractor.meta_keywords + list(self.extractor.tags) + tags))
         return ', '.join(filter(lambda i: i, all_candidates))
