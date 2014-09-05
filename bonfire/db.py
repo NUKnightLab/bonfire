@@ -523,7 +523,7 @@ def search_items(universe, term, quantity=100):
                 lambda r: 'content_url' in r and r.content_url == result.url,
                 res[index+1:])
             if matching_tweets:
-                for tweet in matching_tweets[:3]:
+                for tweet in matching_tweets:
                     popped_tweet = res.pop(res.index(tweet))
                     result['tweets'].append(popped_tweet)
         else:
