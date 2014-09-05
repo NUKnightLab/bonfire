@@ -48,10 +48,9 @@ def process_universe_rawtweets(universe, build_mappings=True):
             logger().debug('Looking for new tweet.')
             raw_tweet = next_unprocessed_tweet(universe, not_ids=list(recent_tweets))
             if raw_tweet:
-                recent_tweets.append(raw_tweet['_id'])
+                recent_tweets.append(raw_tweet._id)
                 seconds_ago = get_since_now(
-                    raw_tweet['_source']['created_at'],
-                    'second', stringify=False)[0]
+                    raw_tweet.created_at, 'second', stringify=False)[0]
                 logger().debug(
                     'New tweet %d seconds ago. Processing.' % seconds_ago)
                 if seconds_ago > 300:
@@ -83,7 +82,7 @@ def process_rawtweet(universe, raw_tweet, session=None):
     if session is None:
         session = create_session()
     # First extract content
-    urls = [u['expanded_url'] for u in raw_tweet['_source']['entities']['urls']]
+    urls = [u['expanded_url'] for u in raw_tweet.entities['urls']]
     for url in urls:
         # Is ths url in our cache?
         resolved_url = get_cached_url(universe, url)
@@ -125,15 +124,15 @@ def process_rawtweet(universe, raw_tweet, session=None):
             save_content(universe, article)
 
     tweet = {
-        'id': raw_tweet['_source']['id_str'],
-        'text': raw_tweet['_source']['text'],
-        'created': raw_tweet['_source']['created_at'],
-        'retweet_count': raw_tweet['_source']['retweet_count'],
-        #'retweeted_status': raw_tweet['_source']['retweeted_status'],
-        'user_id': raw_tweet['_source']['user']['id_str'],
-        'user_name': raw_tweet['_source']['user']['name'],
-        'user_screen_name': raw_tweet['_source']['user']['screen_name'],
-        'user_profile_image_url': raw_tweet['_source']['user']['profile_image_url']
+        'id': raw_tweet.id_str,
+        'text': raw_tweet.text,
+        'created': raw_tweet.created_at,
+        'retweet_count': raw_tweet.retweet_count,
+        #'retweeted_status': raw_tweet.retweeted_status,
+        'user_id': raw_tweet.user['id_str'],
+        'user_name': raw_tweet.user['name'],
+        'user_screen_name': raw_tweet.user['screen_name'],
+        'user_profile_image_url': raw_tweet.user['profile_image_url']
     }
     # Add the resolved URL from the extracted content. Only adds tweet's LAST URL.
     tweet['content_url'] = resolved_url

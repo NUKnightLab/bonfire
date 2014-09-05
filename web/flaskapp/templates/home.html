@@ -51,7 +51,6 @@
         </form>
         </div> -->
 
-        <h3>Content</h3>
 
         <div id="links">
         {% for link in links %}
@@ -86,23 +85,6 @@
         {% endfor %}
         </div>
 
-        <h3>Tweets</h3>
-
-        <div id="tweets">
-
-        {% for tweet in tweets %}
-          <div class="row">
-            <div class="span4">
-              <div class="item">
-                <blockquote class="twitter-tweet"><p>{{ tweet.text }}</p>
-                &mdash; {{ tweet.user_name }} (@{{ tweet.user_screen_name }})
-                <a href="https://twitter.com/{{ tweet.user_screen_name }}/statuses/{{ tweet.id_str }}"></a></blockquote>
-              </div> <!-- .item -->
-            </div> <!-- .span4 -->
-          </div> <!-- .row -->
-        {% endfor %}
-
-        </div> <!-- #tweets -->
       </div> <!-- .span12 -->
     </div>
   </div> <!-- #content -->
