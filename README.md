@@ -27,8 +27,6 @@ pip install .
 
 This will install the bonfire command line tool and dependencies.
 
-*Important:* Do not run pip install with the `--upgrade` option unless you have copied your configuration changes to an external location. `pip install --upgrade` will overwrite the current internal configuration.
-
 
 ## Elasticsearch
 
