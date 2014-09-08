@@ -9,7 +9,7 @@ This is a complete re-write of the original Bonfire project from Knight Lab, whi
 
 The following steps should get you up and running:
 
- * Be sure you have elasticSearch intalled and running
+ * Be sure you have ElasticSearch intalled and running
  * `git clone git@github.com:NUKnightLab/bonfire.git`
  * Inside the repo: `pip install .`
  * `bonfire config`. Add your Twitter credentials and configure a universe seed of up to 15 users.
