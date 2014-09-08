@@ -4,11 +4,13 @@ import os
 import shutil
 import sys
 import ConfigParser
+from pkg_resources import resource_string
 from .config import (
     config_file_path,
     get_universes,
     logging_config,
-    get_universes )
+    get_universes,
+    BONFIRE_CONFIG_ENV_VAR)
 from .db import (
     get_latest_tweet,
     get_latest_raw_tweet,
@@ -18,6 +20,26 @@ from .db import (
 from .universe import build_universe, cache_queries, cleanup_universe
 from .twitter import collect_universe_tweets
 from .process import process_universe_rawtweets
+
+
+def yes_no(s):
+    return s.lower().startswith('y')
+
+
+def ensure_config():
+    path = config_file_path()
+    if not os.path.exists(path):
+        inp = raw_input('\nInitial config file %s has not been created.' \
+            '(Note: to change this path, set the %s environment variable)' \
+            '\n\nCreate %s now? [Y/n] ' % (
+            path, BONFIRE_CONFIG_ENV_VAR, path))
+        if inp == '' or yes_no(inp):
+            with open(path, 'w') as f:
+                f.write(resource_string(__name__, 'bonfire.cfg'))
+    if not os.path.exists(path):
+        print('\nConfig file not found. Run `bonfire config` to create it.')
+        sys.exit(0)
+ensure_config()
 
 logconf = logging_config()
 UNIVERSES = get_universes()

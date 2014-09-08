@@ -16,9 +16,9 @@ _config = None
 def configuration():
     global _config
     if _config is None:
-        #_config = ConfigParser.ConfigParser()
         _config = ConfigParser.SafeConfigParser()
-        with open(config_file_path()) as f:
+        path = config_file_path()
+        with open(path) as f:
             _config.readfp(f)
     return _config
 
