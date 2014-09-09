@@ -22,6 +22,20 @@ from .twitter import collect_universe_tweets
 from .process import process_universe_rawtweets
 
 
+
+from click.core import Command
+from click.decorators import _make_command
+def command(name=None, cls=None, **attrs):
+    if cls is None:
+        cls = Command
+    def decorator(f):
+        r = _make_command(f, name, attrs, cls)
+        r.__doc__ = f.__doc__
+        return r
+    return decorator
+
+
+
 def yes_no(s):
     return s.lower().startswith('y')
 
@@ -77,13 +91,13 @@ def cli():
     pass
 
 
-@click.command()
+@command()
 def config():
     """Configure Bonfire."""
     edit_file(config_file_path())
 
 
-@click.command()
+@command()
 def universes():
     """Display configured universes."""
     click.echo('\nUniverses defined in config file:')
@@ -95,7 +109,7 @@ def universes():
     click.echo()
 
 
-@click.command()
+@command()
 @click.argument('universe', default=DEFAULT_UNIVERSE,
     type=click.Choice(UNIVERSES))
 def build(universe):
@@ -104,7 +118,7 @@ def build(universe):
     build_universe(universe)
 
 
-@click.command()
+@command()
 @click.argument('universe', default=DEFAULT_UNIVERSE,
     type=click.Choice(UNIVERSES))
 def collect(universe):
@@ -113,7 +127,7 @@ def collect(universe):
     collect_universe_tweets(universe)
 
 
-@click.command()
+@command()
 @click.argument('universe', default=DEFAULT_UNIVERSE,
     type=click.Choice(UNIVERSES))
 def process(universe):
@@ -122,7 +136,7 @@ def process(universe):
     process_universe_rawtweets(universe)
 
 
-@click.command()
+@command()
 @click.argument('universe', default=DEFAULT_UNIVERSE,
     type=click.Choice(UNIVERSES))
 @click.option('--top_links', is_flag=True)
@@ -133,7 +147,7 @@ def cache(universe, top_links, tweet):
     cache_queries(universe, top_links=top_links, tweet=tweet)
 
 
-@click.command()
+@command()
 @click.argument('universe', default=DEFAULT_UNIVERSE,
     type=click.Choice(UNIVERSES))
 @click.option('--days', default=30,
@@ -143,7 +157,7 @@ def cleanup(universe, days):
     cleanup_universe(universe, days=days)
 
 
-@click.command()
+@command()
 @click.argument('universe', default=DEFAULT_UNIVERSE)
 def lasttweet(universe):
     """Show the latest processed tweet."""
@@ -157,7 +171,7 @@ def lasttweet(universe):
         print ''
 
 
-@click.command()
+@command()
 @click.argument('universe', default=DEFAULT_UNIVERSE)
 def lastrawtweet(universe):
     """Show the latest unprocessed queued tweet."""
@@ -170,7 +184,7 @@ def lastrawtweet(universe):
         print t.created_at
         print ''
 
-@click.command()
+@command()
 @click.argument('universe')
 @click.argument('url')
 def delete(universe, url):
@@ -179,14 +193,14 @@ def delete(universe, url):
     delete_tweets_by_url(universe, url)
 
 
-@click.command()
+@command()
 @click.argument('universe', default=DEFAULT_UNIVERSE)
 def remap(universe):
     """Delete universe data and rebuild mappings."""
     build_universe_mappings(universe, True)
 
 
-@click.command()
+@command()
 @click.pass_context
 def help(ctx):
     """Show help."""
