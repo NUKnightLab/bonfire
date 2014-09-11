@@ -82,6 +82,7 @@ Upstart
 The following example shows use of upstart with bonfire being executed by a user called ``apps`` within a virtual environment at ``/home/apps/env/bonfire``. The virtualenv sets the ``BONFIRE_CONFIG`` environment variable to ``/etc/bonfire.cfg``. The bonfire.cfg file has a logging section that looks like this:
 
 ::
+
     [logging]
     filename=/var/log/bonfire.log
     level=WARNING
@@ -89,6 +90,7 @@ The following example shows use of upstart with bonfire being executed by a user
 /etc/init/bonfire-collect.conf
 
 ::
+
     start on filesystem and net-device-up IFACE=lo
 
     stop on shutdown
@@ -104,6 +106,7 @@ The following example shows use of upstart with bonfire being executed by a user
 /etc/init/bonfire-process.conf
 
 ::
+
     start on filesystem and net-device-up IFACE=lo
 
     stop on shutdown
@@ -118,6 +121,7 @@ The following example shows use of upstart with bonfire being executed by a user
 You can then control the bonfire services with:
 
 ::
+
     sudo service bonfire-collect [start|stop|restart]
 
 
