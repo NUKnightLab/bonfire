@@ -2,6 +2,10 @@
 
 Automated curation of tweeted content from your Twitterverse. A Tweeted content curator inspired by Nieman Lab's Fuego project and developed jointly by Nieman Lab and Knight Lab.
 
+# Documentation
+
+Docs are [here](http://nuknightlab.github.io/bonfire/)
+
 # Quickstart
 
 The following steps should get you up and running:
