@@ -1,0 +1,179 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+
+
+<html xmlns="http://www.w3.org/1999/xhtml">
+  <head>
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+    
+    <title>Deployment &mdash; Bonfire 0.1 documentation</title>
+    
+    <link rel="stylesheet" href="_static/default.css" type="text/css" />
+    <link rel="stylesheet" href="_static/pygments.css" type="text/css" />
+    
+    <script type="text/javascript">
+      var DOCUMENTATION_OPTIONS = {
+        URL_ROOT:    './',
+        VERSION:     '0.1',
+        COLLAPSE_INDEX: false,
+        FILE_SUFFIX: '.html',
+        HAS_SOURCE:  true
+      };
+    </script>
+    <script type="text/javascript" src="_static/jquery.js"></script>
+    <script type="text/javascript" src="_static/underscore.js"></script>
+    <script type="text/javascript" src="_static/doctools.js"></script>
+    <link rel="top" title="Bonfire 0.1 documentation" href="index.html" />
+    <link rel="next" title="API Documentation" href="api.html" />
+    <link rel="prev" title="Bonfire documentation" href="index.html" /> 
+  </head>
+  <body>
+    <div class="related">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="genindex.html" title="General Index"
+             accesskey="I">index</a></li>
+        <li class="right" >
+          <a href="py-modindex.html" title="Python Module Index"
+             >modules</a> |</li>
+        <li class="right" >
+          <a href="api.html" title="API Documentation"
+             accesskey="N">next</a> |</li>
+        <li class="right" >
+          <a href="index.html" title="Bonfire documentation"
+             accesskey="P">previous</a> |</li>
+        <li><a href="index.html">Bonfire 0.1 documentation</a> &raquo;</li> 
+      </ul>
+    </div>  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          <div class="body">
+            
+  <div class="section" id="deployment">
+<h1>Deployment<a class="headerlink" href="#deployment" title="Permalink to this headline">¶</a></h1>
+<p>Within the cloned repo, run:</p>
+<div class="highlight-python"><div class="highlight"><pre>pip install .
+</pre></div>
+</div>
+<p>This will install the bonfire command line tool and dependencies.</p>
+</div>
+<div class="section" id="elasticsearch">
+<h1>Elasticsearch<a class="headerlink" href="#elasticsearch" title="Permalink to this headline">¶</a></h1>
+<p>For information about installing Elasticsearch, please go to <a class="reference external" href="http://elasticsearch.org">http://elasticsearch.org</a>.</p>
+</div>
+<div class="section" id="configuration">
+<h1>Configuration<a class="headerlink" href="#configuration" title="Permalink to this headline">¶</a></h1>
+<p>Bonfire comes with some example universes built-in. To see the configuration, and add your own universe configuration, run <tt class="docutils literal"><span class="pre">bonfire</span> <span class="pre">config</span></tt>. You will need to have your EDITOR environment variable set for this command to work.</p>
+<p>Each universe defined by a <tt class="docutils literal"><span class="pre">[universe:&lt;universe-name&gt;]</span></tt> section in the configuration file should have its own Twitter application credentials set for <tt class="docutils literal"><span class="pre">twitter_consumer_key</span></tt>, <tt class="docutils literal"><span class="pre">twitter_consumer_secret</span></tt>, <tt class="docutils literal"><span class="pre">twitter_access_token</span></tt>, and <tt class="docutils literal"><span class="pre">twitter_access_token_secret</span></tt>. To setup your Twitter applications, login to the Twitter developer console with your Twitter account at <a class="reference external" href="https://dev.twitter.com/">https://dev.twitter.com/</a>.</p>
+</div>
+<div class="section" id="development">
+<h1>Development<a class="headerlink" href="#development" title="Permalink to this headline">¶</a></h1>
+<p>To create an editable local deployment for development (ideally within
+a virtualenvironment):</p>
+<div class="highlight-python"><div class="highlight"><pre>pip install --editable .
+</pre></div>
+</div>
+<p>This will install the bonfire command line tool, and dependencies.</p>
+</div>
+<div class="section" id="testing">
+<h1>Testing<a class="headerlink" href="#testing" title="Permalink to this headline">¶</a></h1>
+<p>To run all tests:</p>
+<div class="highlight-python"><div class="highlight"><pre>python setup.py test
+</pre></div>
+</div>
+<p>To test a specific module:</p>
+<div class="highlight-python"><div class="highlight"><pre>python -m unittest tests.test_universe
+</pre></div>
+</div>
+</div>
+<div class="section" id="logging">
+<h1>Logging<a class="headerlink" href="#logging" title="Permalink to this headline">¶</a></h1>
+<p>Parameters in the [logging] section of the bonfire configuration file are passed to a basicConfig logging configuration. These include</p>
+<blockquote>
+<div><ul class="simple">
+<li>filename</li>
+<li>level</li>
+<li>filemode</li>
+<li>format</li>
+<li>datefmt</li>
+</ul>
+</div></blockquote>
+<p>If the [logging] section includes an option called <tt class="docutils literal"><span class="pre">configfile</span></tt>, the specified file will be used to setup a fileConfig instead of the basic config. Remaining parameters listed above will be passed to fileConfig as defaults. An example logging config file is provided called <tt class="docutils literal"><span class="pre">logging.conf.example</span></tt>.</p>
+</div>
+<div class="section" id="flask-web-application">
+<h1>Flask Web Application<a class="headerlink" href="#flask-web-application" title="Permalink to this headline">¶</a></h1>
+<p>There is an example web application in bonfire/web/flaskapp. To run this you will need to install Flask: <tt class="docutils literal"><span class="pre">pip</span> <span class="pre">install</span> <span class="pre">flask</span></tt>.</p>
+</div>
+
+
+          </div>
+        </div>
+      </div>
+      <div class="sphinxsidebar">
+        <div class="sphinxsidebarwrapper">
+  <h3><a href="index.html">Table Of Contents</a></h3>
+  <ul>
+<li><a class="reference internal" href="#">Deployment</a></li>
+<li><a class="reference internal" href="#elasticsearch">Elasticsearch</a></li>
+<li><a class="reference internal" href="#configuration">Configuration</a></li>
+<li><a class="reference internal" href="#development">Development</a></li>
+<li><a class="reference internal" href="#testing">Testing</a></li>
+<li><a class="reference internal" href="#logging">Logging</a></li>
+<li><a class="reference internal" href="#flask-web-application">Flask Web Application</a></li>
+</ul>
+
+  <h4>Previous topic</h4>
+  <p class="topless"><a href="index.html"
+                        title="previous chapter">Bonfire documentation</a></p>
+  <h4>Next topic</h4>
+  <p class="topless"><a href="api.html"
+                        title="next chapter">API Documentation</a></p>
+  <h3>This Page</h3>
+  <ul class="this-page-menu">
+    <li><a href="_sources/general.txt"
+           rel="nofollow">Show Source</a></li>
+  </ul>
+<div id="searchbox" style="display: none">
+  <h3>Quick search</h3>
+    <form class="search" action="search.html" method="get">
+      <input type="text" name="q" />
+      <input type="submit" value="Go" />
+      <input type="hidden" name="check_keywords" value="yes" />
+      <input type="hidden" name="area" value="default" />
+    </form>
+    <p class="searchtip" style="font-size: 90%">
+    Enter search terms or a module, class or function name.
+    </p>
+</div>
+<script type="text/javascript">$('#searchbox').show(0);</script>
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="related">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="genindex.html" title="General Index"
+             >index</a></li>
+        <li class="right" >
+          <a href="py-modindex.html" title="Python Module Index"
+             >modules</a> |</li>
+        <li class="right" >
+          <a href="api.html" title="API Documentation"
+             >next</a> |</li>
+        <li class="right" >
+          <a href="index.html" title="Bonfire documentation"
+             >previous</a> |</li>
+        <li><a href="index.html">Bonfire 0.1 documentation</a> &raquo;</li> 
+      </ul>
+    </div>
+    <div class="footer">
+        &copy; Copyright 2014, Northwestern University Knight Lab &amp; Nieman Journalism Lab.
+      Created using <a href="http://sphinx-doc.org/">Sphinx</a> 1.2.2.
+    </div>
+  </body>
+</html>
