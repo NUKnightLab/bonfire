@@ -113,45 +113,41 @@ a virtualenvironment):</p>
 <div class="section" id="upstart">
 <h2>Upstart<a class="headerlink" href="#upstart" title="Permalink to this headline">¶</a></h2>
 <p>The following example shows use of upstart with bonfire being executed by a user called <tt class="docutils literal"><span class="pre">apps</span></tt> within a virtual environment at <tt class="docutils literal"><span class="pre">/home/apps/env/bonfire</span></tt>. The virtualenv sets the <tt class="docutils literal"><span class="pre">BONFIRE_CONFIG</span></tt> environment variable to <tt class="docutils literal"><span class="pre">/etc/bonfire.cfg</span></tt>. The bonfire.cfg file has a logging section that looks like this:</p>
-<dl class="docutils">
-<dt>::</dt>
-<dd>[logging]
+<div class="highlight-python"><div class="highlight"><pre>[logging]
 filename=/var/log/bonfire.log
-level=WARNING</dd>
-</dl>
+level=WARNING
+</pre></div>
+</div>
 <p>/etc/init/bonfire-collect.conf</p>
-<dl class="docutils">
-<dt>::</dt>
-<dd><p class="first">start on filesystem and net-device-up IFACE=lo</p>
-<p>stop on shutdown</p>
-<p>respawn</p>
-<dl class="docutils">
-<dt>script</dt>
-<dd>. /home/apps/env/bonfire/bin/activate
-exec bonfire collect journotech</dd>
-</dl>
-<p class="last">end script</p>
-</dd>
-</dl>
+<div class="highlight-python"><div class="highlight"><pre>start on filesystem and net-device-up IFACE=lo
+
+stop on shutdown
+
+respawn
+
+script
+  . /home/apps/env/bonfire/bin/activate
+  exec bonfire collect journotech
+end script
+</pre></div>
+</div>
 <p>/etc/init/bonfire-process.conf</p>
-<dl class="docutils">
-<dt>::</dt>
-<dd><p class="first">start on filesystem and net-device-up IFACE=lo</p>
-<p>stop on shutdown</p>
-<p>respawn</p>
-<dl class="docutils">
-<dt>script</dt>
-<dd>. /home/apps/env/bonfire/bin/activate
-exec bonfire process journotech</dd>
-</dl>
-<p class="last">end script</p>
-</dd>
-</dl>
+<div class="highlight-python"><div class="highlight"><pre>start on filesystem and net-device-up IFACE=lo
+
+stop on shutdown
+
+respawn
+
+script
+  . /home/apps/env/bonfire/bin/activate
+  exec bonfire process journotech
+end script
+</pre></div>
+</div>
 <p>You can then control the bonfire services with:</p>
-<dl class="docutils">
-<dt>::</dt>
-<dd>sudo service bonfire-collect [start|stop|restart]</dd>
-</dl>
+<div class="highlight-python"><div class="highlight"><pre>sudo service bonfire-collect [start|stop|restart]
+</pre></div>
+</div>
 </div>
 <div class="section" id="troublehooting-upstart">
 <h2>Troublehooting Upstart<a class="headerlink" href="#troublehooting-upstart" title="Permalink to this headline">¶</a></h2>
