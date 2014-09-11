@@ -1,5 +1,5 @@
-Deployment
-==========
+Installation
+============
 
 Within the cloned repo, run:
 
@@ -71,3 +71,56 @@ Flask Web Application
 There is an example web application in bonfire/web/flaskapp. To run this you will need to install Flask: ``pip install flask``.
 
 
+Deployment
+==========
+
+It is recommended that you run the bonfire processes via a process manager. The following demonstrates Upstart usage for Ubuntu. 
+
+Upstart
+-------
+
+The following example shows use of upstart with bonfire being executed by a user called ``apps`` within a virtual environment at ``/home/apps/env/bonfire``. The virtualenv sets the ``BONFIRE_CONFIG`` environment variable to ``/etc/bonfire.cfg``. The bonfire.cfg file has a logging section that looks like this:
+
+::
+    [logging]
+    filename=/var/log/bonfire.log
+    level=WARNING
+
+/etc/init/bonfire-collect.conf
+
+::
+    start on filesystem and net-device-up IFACE=lo
+
+    stop on shutdown
+
+    respawn
+
+    script
+      . /home/apps/env/bonfire/bin/activate
+      exec bonfire collect journotech
+    end script 
+
+
+/etc/init/bonfire-process.conf
+
+::
+    start on filesystem and net-device-up IFACE=lo
+
+    stop on shutdown
+
+    respawn
+
+    script
+      . /home/apps/env/bonfire/bin/activate
+      exec bonfire process journotech
+    end script
+
+You can then control the bonfire services with:
+
+::
+    sudo service bonfire-collect [start|stop|restart]
+
+
+Troublehooting Upstart
+----------------------
+If your Upstart services seem to be running, but you aren't seeing any Tweets or any logs, be sure to check the upstart logs. E.g: /var/log/upstart/bonfire-collect.log
