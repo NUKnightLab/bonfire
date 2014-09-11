@@ -28,7 +28,7 @@ The following steps should get you up and running:
 
  * Be sure you have ElasticSearch intalled and running
  * ``git clone git@github.com:NUKnightLab/bonfire.git``
- * Inside the repo: ``pip install .``
+ * Inside the repo: ``pip install .`` (preferably in a virtualenv)
  * ``bonfire config``. Add your Twitter credentials and configure a universe seed of up to 14 users.
  * ``bonfire build``. This will expand the universe from the seed and prepare Elasticsearch to run bonfire.
  * In separate terminals run: ``bonfire collect`` and ``bonfire process`` for each universe you've defined.
