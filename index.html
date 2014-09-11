@@ -54,7 +54,7 @@
 </div>
 <div class="section" id="project-on-github">
 <h1>Project on Github<a class="headerlink" href="#project-on-github" title="Permalink to this headline">¶</a></h1>
-<p>The Bonfire project is [here](<a class="reference external" href="https://github.com/NUKnightLab/bonfire">https://github.com/NUKnightLab/bonfire</a>)</p>
+<p>The Bonfire project is here: <a class="reference external" href="https://github.com/NUKnightLab/bonfire">https://github.com/NUKnightLab/bonfire</a></p>
 </div>
 <div class="section" id="indices-and-tables">
 <h1>Indices and tables<a class="headerlink" href="#indices-and-tables" title="Permalink to this headline">¶</a></h1>
@@ -63,6 +63,79 @@
 <li><a class="reference internal" href="py-modindex.html"><em>Module Index</em></a></li>
 <li><a class="reference internal" href="search.html"><em>Search Page</em></a></li>
 </ul>
+</div>
+<div class="section" id="quickstart">
+<h1>Quickstart<a class="headerlink" href="#quickstart" title="Permalink to this headline">¶</a></h1>
+<p>The following steps should get you up and running:</p>
+<blockquote>
+<div><ul class="simple">
+<li>Be sure you have ElasticSearch intalled and running</li>
+<li><cite>git clone git&#64;github.com:NUKnightLab/bonfire.git</cite></li>
+<li>Inside the repo: <cite>pip install .</cite></li>
+<li><cite>bonfire config</cite>. Add your Twitter credentials and configure a universe seed of up to 14 users.</li>
+<li><cite>bonfire build</cite>. This will expand the universe from the seed and prepare Elasticsearch to run bonfire.</li>
+<li>In separate terminals run: <cite>bonfire collect</cite> and <cite>bonfire process</cite> for each universe you&#8217;ve defined.</li>
+<li>To see results in the example web application, be sure to <cite>pip install Flask</cite> and run <cite>app.py</cite> that is located in the repository in web/flaskapp.</li>
+</ul>
+</div></blockquote>
+<p># Deployment</p>
+<p>Within the cloned repo, run:</p>
+<p><tt class="docutils literal"><span class="pre">`</span>
+<span class="pre">pip</span> <span class="pre">install</span> <span class="pre">.</span>
+<span class="pre">`</span></tt></p>
+<p>This will install the bonfire command line tool and dependencies.</p>
+</div>
+<div class="section" id="elasticsearch">
+<h1>Elasticsearch<a class="headerlink" href="#elasticsearch" title="Permalink to this headline">¶</a></h1>
+<p>For information about installing Elasticsearch, please go to <a class="reference external" href="http://elasticsearch.org">http://elasticsearch.org</a>.</p>
+</div>
+<div class="section" id="configuration">
+<h1>Configuration<a class="headerlink" href="#configuration" title="Permalink to this headline">¶</a></h1>
+<p>Bonfire comes with some example universes built-in. To see the configuration, and add your own universe configuration, run <cite>bonfire config</cite>. You will need to have your EDITOR environment variable set for this command to work.</p>
+<p>Each universe defined by a <cite>[universe:&lt;universe-name&gt;]</cite> section in the configuration file should have its own Twitter application credentials set for <cite>twitter_consumer_key</cite>, <cite>twitter_consumer_secret</cite>, <cite>twitter_access_token</cite>, and <cite>twitter_access_token_secret</cite>. To setup your Twitter applications, login to the Twitter developer console with your Twitter account at <a class="reference external" href="https://dev.twitter.com/">https://dev.twitter.com/</a>.</p>
+</div>
+<div class="section" id="development">
+<h1>Development<a class="headerlink" href="#development" title="Permalink to this headline">¶</a></h1>
+<p>To create an editable local deployment for development (ideally within
+a virtualenvironment):</p>
+<p><tt class="docutils literal"><span class="pre">`</span>
+<span class="pre">pip</span> <span class="pre">install</span> <span class="pre">--editable</span> <span class="pre">.</span>
+<span class="pre">`</span></tt></p>
+<p>This will install the bonfire command line tool, and dependencies.</p>
+</div>
+<div class="section" id="testing">
+<h1>Testing<a class="headerlink" href="#testing" title="Permalink to this headline">¶</a></h1>
+<p>To run all tests:</p>
+<blockquote>
+<div>python setup.py test</div></blockquote>
+<p>To test a specific module:</p>
+<blockquote>
+<div>python -m unittest tests.test_universe</div></blockquote>
+</div>
+<div class="section" id="usage">
+<h1>Usage<a class="headerlink" href="#usage" title="Permalink to this headline">¶</a></h1>
+<p>The installation and development installation processes above install the bonfire command line utility to your path. For info on using Bonfire, type:</p>
+<p><tt class="docutils literal"><span class="pre">`</span>
+<span class="pre">bonfire</span> <span class="pre">--help</span>
+<span class="pre">`</span></tt></p>
+</div>
+<div class="section" id="logging">
+<h1>Logging<a class="headerlink" href="#logging" title="Permalink to this headline">¶</a></h1>
+<p>Parameters in the [logging] section of the bonfire configuration file are passed to a basicConfig logging configuration. These include</p>
+<blockquote>
+<div><ul class="simple">
+<li>filename</li>
+<li>level</li>
+<li>filemode</li>
+<li>format</li>
+<li>datefmt</li>
+</ul>
+</div></blockquote>
+<p>If the [logging] section includes an option called <cite>configfile</cite>, the specified file will be used to setup a fileConfig instead of the basic config. Remaining parameters listed above will be passed to fileConfig as defaults. An example logging config file is provided called <cite>logging.conf.example</cite>.</p>
+</div>
+<div class="section" id="flask-web-application">
+<h1>Flask Web Application<a class="headerlink" href="#flask-web-application" title="Permalink to this headline">¶</a></h1>
+<p>There is an example web application in bonfire/web/flaskapp. To run this you will need to install Flask: <cite>pip install flask</cite>.</p>
 </div>
 <div class="section" id="api-documentation">
 <h1>API Documentation<a class="headerlink" href="#api-documentation" title="Permalink to this headline">¶</a></h1>
@@ -2378,6 +2451,14 @@ need to be sure not to exceed 15 hits/15 min.</p>
 <li><a class="reference internal" href="#">Welcome to Bonfire&#8217;s documentation!</a></li>
 <li><a class="reference internal" href="#project-on-github">Project on Github</a></li>
 <li><a class="reference internal" href="#indices-and-tables">Indices and tables</a></li>
+<li><a class="reference internal" href="#quickstart">Quickstart</a></li>
+<li><a class="reference internal" href="#elasticsearch">Elasticsearch</a></li>
+<li><a class="reference internal" href="#configuration">Configuration</a></li>
+<li><a class="reference internal" href="#development">Development</a></li>
+<li><a class="reference internal" href="#testing">Testing</a></li>
+<li><a class="reference internal" href="#usage">Usage</a></li>
+<li><a class="reference internal" href="#logging">Logging</a></li>
+<li><a class="reference internal" href="#flask-web-application">Flask Web Application</a></li>
 <li><a class="reference internal" href="#api-documentation">API Documentation</a><ul>
 <li><a class="reference internal" href="#module-bonfire.cli">bonfire.cli</a></li>
 <li><a class="reference internal" href="#module-bonfire.config">bonfire.config</a></li>
