@@ -11,6 +11,11 @@ Contents:
 .. toctree::
    :maxdepth: 2
 
+Project on Github
+=================
+
+The Bonfire project is [here](https://github.com/NUKnightLab/bonfire)
+
 
 
 Indices and tables
