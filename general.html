@@ -6,7 +6,7 @@
   <head>
     <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
     
-    <title>Deployment &mdash; Bonfire 0.1 documentation</title>
+    <title>Installation &mdash; Bonfire 0.1 documentation</title>
     
     <link rel="stylesheet" href="_static/default.css" type="text/css" />
     <link rel="stylesheet" href="_static/pygments.css" type="text/css" />
@@ -52,8 +52,8 @@
         <div class="bodywrapper">
           <div class="body">
             
-  <div class="section" id="deployment">
-<h1>Deployment<a class="headerlink" href="#deployment" title="Permalink to this headline">¶</a></h1>
+  <div class="section" id="installation">
+<h1>Installation<a class="headerlink" href="#installation" title="Permalink to this headline">¶</a></h1>
 <p>Within the cloned repo, run:</p>
 <div class="highlight-python"><div class="highlight"><pre>pip install .
 </pre></div>
@@ -107,6 +107,57 @@ a virtualenvironment):</p>
 <h1>Flask Web Application<a class="headerlink" href="#flask-web-application" title="Permalink to this headline">¶</a></h1>
 <p>There is an example web application in bonfire/web/flaskapp. To run this you will need to install Flask: <tt class="docutils literal"><span class="pre">pip</span> <span class="pre">install</span> <span class="pre">flask</span></tt>.</p>
 </div>
+<div class="section" id="deployment">
+<h1>Deployment<a class="headerlink" href="#deployment" title="Permalink to this headline">¶</a></h1>
+<p>It is recommended that you run the bonfire processes via a process manager. The following demonstrates Upstart usage for Ubuntu.</p>
+<div class="section" id="upstart">
+<h2>Upstart<a class="headerlink" href="#upstart" title="Permalink to this headline">¶</a></h2>
+<p>The following example shows use of upstart with bonfire being executed by a user called <tt class="docutils literal"><span class="pre">apps</span></tt> within a virtual environment at <tt class="docutils literal"><span class="pre">/home/apps/env/bonfire</span></tt>. The virtualenv sets the <tt class="docutils literal"><span class="pre">BONFIRE_CONFIG</span></tt> environment variable to <tt class="docutils literal"><span class="pre">/etc/bonfire.cfg</span></tt>. The bonfire.cfg file has a logging section that looks like this:</p>
+<dl class="docutils">
+<dt>::</dt>
+<dd>[logging]
+filename=/var/log/bonfire.log
+level=WARNING</dd>
+</dl>
+<p>/etc/init/bonfire-collect.conf</p>
+<dl class="docutils">
+<dt>::</dt>
+<dd><p class="first">start on filesystem and net-device-up IFACE=lo</p>
+<p>stop on shutdown</p>
+<p>respawn</p>
+<dl class="docutils">
+<dt>script</dt>
+<dd>. /home/apps/env/bonfire/bin/activate
+exec bonfire collect journotech</dd>
+</dl>
+<p class="last">end script</p>
+</dd>
+</dl>
+<p>/etc/init/bonfire-process.conf</p>
+<dl class="docutils">
+<dt>::</dt>
+<dd><p class="first">start on filesystem and net-device-up IFACE=lo</p>
+<p>stop on shutdown</p>
+<p>respawn</p>
+<dl class="docutils">
+<dt>script</dt>
+<dd>. /home/apps/env/bonfire/bin/activate
+exec bonfire process journotech</dd>
+</dl>
+<p class="last">end script</p>
+</dd>
+</dl>
+<p>You can then control the bonfire services with:</p>
+<dl class="docutils">
+<dt>::</dt>
+<dd>sudo service bonfire-collect [start|stop|restart]</dd>
+</dl>
+</div>
+<div class="section" id="troublehooting-upstart">
+<h2>Troublehooting Upstart<a class="headerlink" href="#troublehooting-upstart" title="Permalink to this headline">¶</a></h2>
+<p>If your Upstart services seem to be running, but you aren&#8217;t seeing any Tweets or any logs, be sure to check the upstart logs. E.g: /var/log/upstart/bonfire-collect.log</p>
+</div>
+</div>
 
 
           </div>
@@ -116,13 +167,18 @@ a virtualenvironment):</p>
         <div class="sphinxsidebarwrapper">
   <h3><a href="index.html">Table Of Contents</a></h3>
   <ul>
-<li><a class="reference internal" href="#">Deployment</a></li>
+<li><a class="reference internal" href="#">Installation</a></li>
 <li><a class="reference internal" href="#elasticsearch">Elasticsearch</a></li>
 <li><a class="reference internal" href="#configuration">Configuration</a></li>
 <li><a class="reference internal" href="#development">Development</a></li>
 <li><a class="reference internal" href="#testing">Testing</a></li>
 <li><a class="reference internal" href="#logging">Logging</a></li>
 <li><a class="reference internal" href="#flask-web-application">Flask Web Application</a></li>
+<li><a class="reference internal" href="#deployment">Deployment</a><ul>
+<li><a class="reference internal" href="#upstart">Upstart</a></li>
+<li><a class="reference internal" href="#troublehooting-upstart">Troublehooting Upstart</a></li>
+</ul>
+</li>
 </ul>
 
   <h4>Previous topic</h4>
