@@ -128,3 +128,32 @@ You can then control the bonfire services with:
 Troublehooting Upstart
 ----------------------
 If your Upstart services seem to be running, but you aren't seeing any Tweets or any logs, be sure to check the upstart logs. E.g: /var/log/upstart/bonfire-collect.log
+
+Troubleshooting the Bonfire collector
+-------------------------------------
+The Twitter stream can be a bit finicky and the collector has been known stop collecting even when the stream connection remains open. Firstly, be sure to run the collector in a process manager, as described above. Secondly, it might be useful to monitor the raw tweet queue and occasionally restart the collector process if the queue is empty. The following example shows restarting the collector, configured as in the above examples with upstart. This script can be run with cron to periodically check the queue.
+
+/home/apps/sites/bonfire/monitor.py
+::
+
+    import subprocess
+    from bonfire.db import get_latest_raw_tweet
+
+    def main():
+            if get_latest_raw_tweet('journotech'):
+                print('bonfire collect queue not empty')
+            else:
+                print('restarting bonfire collect')
+                subprocess.call('service bonfire-collect restart', shell=True)
+
+    if __name__=='__main__':
+        main()
+
+
+/etc/cron.d/bonfire
+::
+
+    PYTHONPATH=/home/apps/sites/bonfire
+    BONFIRE_CONFIG=/etc/bonfire.cfg
+
+    */15 * * * * root cd /home/apps/sites/bonfire; /home/apps/env/bonfire/bin/python monitor.py  >> /home/apps/log/bonfire/bonfire_monitor.log 2>&1
