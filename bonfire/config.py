@@ -55,6 +55,8 @@ def get_twitter_keys(universe):
         'access_token',
         'access_token_secret'])
     section = 'universe:%s' % universe
+    if not config.has_section(section):
+        section = 'list:%s' % universe
     k = TwitterKeys(
         config.get(section, 'twitter_consumer_key'),
         config.get(section, 'twitter_consumer_secret'),
@@ -65,7 +67,8 @@ def get_twitter_keys(universe):
 
 def get_elasticsearch_hosts(universe):
     config = configuration()
-    hosts = config.get('universe:%s' % universe, 'elasticsearch_hosts')
+    universe = 'universe:%s' % universe
+    hosts = config.get(universe, 'elasticsearch_hosts')
     return [s.strip() for s in CONFIG_LIST_REGEX.split(hosts) if s.strip()]
 
 
@@ -83,3 +86,14 @@ def logging_config():
         }
     except ConfigParser.NoSectionError:
         return {}
+
+
+def get_list_config(universe):
+    config = configuration()
+    section = 'universe:%s' % universe
+    return {
+        'list_id': get(section, 'list_id'),
+        'slug': get(section, 'slug'),
+        'owner_screen_name': get(section, 'owner_screen_name'),
+        'owner_id': get(section, 'owner_id')
+    }

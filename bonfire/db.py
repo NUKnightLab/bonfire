@@ -599,7 +599,7 @@ def score_link(link, user_weights, time_decay=True, hours=24):
         score_explanation.append(
             'decay for %d hours drops score to %.2f (%.2f of original). '\
             'Velocity of %.2f' %\
-            (hours_since, score, score/orig_score, velocity))
+            (hours_since, score, score/orig_score if orig_score else score, velocity))
     return score, score_explanation
 
 
