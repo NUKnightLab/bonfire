@@ -74,8 +74,11 @@ def build_universe_mappings(universe, rebuild=False):
             es(universe).indices.create(index=index_name)
         for doc_type, doc_mapping in index_mapping.items():
             if rebuild:
-                es(universe).indices.delete_mapping(
-                    index=index_name, doc_type=doc_type) 
+                try:
+                    es(universe).indices.delete_mapping(
+                        index=index_name, doc_type=doc_type) 
+                except NotFoundError:
+                    pass
             es(universe).indices.put_mapping(
                 doc_type, doc_mapping, index=index_name)
 
