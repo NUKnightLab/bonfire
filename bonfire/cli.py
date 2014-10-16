@@ -123,7 +123,6 @@ def build(universe):
     type=click.Choice(UNIVERSES))
 def collect(universe):
     """Collect Tweets for a universe."""
-    click.echo('Collecting universe: %s' % universe)
     collect_universe_tweets(universe)
 
 
@@ -132,7 +131,7 @@ def collect(universe):
     type=click.Choice(UNIVERSES))
 def process(universe):
     """Resolve, extract, and save tweets from a universe."""
-    click.echo('Processing universe: %s' % universe)
+    click.echo('Processing: %s' % universe)
     process_universe_rawtweets(universe)
 
 
@@ -194,8 +193,9 @@ def delete(universe, url):
 
 
 @command()
-@click.argument('universe', default=DEFAULT_UNIVERSE)
-def remap(universe):
+@click.argument('universe', default=DEFAULT_UNIVERSE,
+    type=click.Choice(UNIVERSES))
+def map(universe):
     """Delete universe data and rebuild mappings."""
     build_universe_mappings(universe, True)
 
@@ -218,5 +218,5 @@ cli.add_command(cleanup)
 cli.add_command(lasttweet)
 cli.add_command(lastrawtweet)
 cli.add_command(delete)
-cli.add_command(remap)
+cli.add_command(map)
 cli.add_command(help)
