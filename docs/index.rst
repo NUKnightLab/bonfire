@@ -3,8 +3,16 @@
    You can adapt this file completely to your liking, but it should at least
    contain the root `toctree` directive.
 
-Bonfire documentation
+What is Bonfire?
 ===================================
+Bonfire is a toolkit you can use to track link sharing on Twitter. Inspired by Nieman Lab's Fuego_, Bonfire tracks tweets from a *universe* of users, looking for shared URLs. Bonfire can provide simple analytics about the shared URLs (at the moment, the number of times the URL was shared in a given time period), and creates a search index of the shared documents and the text of tweets.
+
+Bonfire also has a simple method for building a universe of thousands of Twitter users based on a small seed list of a dozen or so Twitter handles.
+
+Bonfire is currently in a developer release--running your own instance requires comfort with the command line. Setting it up to continuously monitor Twitter takes some "devops" skills, and at the moment, there is only a rough web interface. 
+
+We welcome ideas, priorities, and pull requests. For now you can use `Github Issues`_ to reach us.
+
 
 Project on Github
 =================
@@ -53,3 +61,5 @@ Documentation Contents
    general
    api
 
+.. _Fuego: http://www.niemanlab.org/fuego/
+.. _Github Issues: https://github.com/NUKnightLab/bonfire/issues
